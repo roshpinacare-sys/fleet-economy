@@ -40,3 +40,18 @@ Bun v1.3.14 (Linux x64 baseline)
 [fleet-economy] חי על :3016 · restored=true · seq=42241 · תורת-משתמשי-פנים בעיצומה · vault-seal מובנה · ingest-אירועים-אמת מחובר (dex-fills+verifier+seal)
 [fleet-economy] boot-tail-replay: +56 עסקאות → seq=19922
 [fleet-economy] חי על :3016 · restored=true · seq=19922 · תורת-משתמשי-פנים בעיצומה · vault-seal מובנה · ingest-אירועים-אמת מחובר (dex-fills+verifier+seal)
+487 |   const tmp = SNAP + ".tmp";
+488 |   fs.writeFileSync(tmp, JSON.stringify(obj));
+489 |   fs.renameSync(tmp, SNAP);
+490 | }
+491 | 
+492 | const server = Bun.serve({
+                         ^
+error: Failed to start server. Is port 3016 in use?
+ syscall: "listen",
+   errno: 0,
+    code: "EADDRINUSE"
+
+      at /home/z/estate/fleet-economy/index.ts:492:20
+
+Bun v1.3.14 (Linux x64 baseline)
