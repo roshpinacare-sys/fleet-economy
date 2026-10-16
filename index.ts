@@ -586,6 +586,7 @@ const server = Bun.serve({
 import { execFile } from "child_process";
 const SEAL_REPOS = [
   "/home/z/my-project",
+  "/home/z/estate/fleet-economy", // גל-84 · ביתו-העצמאי-של-המנוע — הספר-החי-נאטם-לכספת-משלו
   "/home/z/estate/FleetHQ",
   "/home/z/estate/Domain",
   "/home/z/estate/Console",
@@ -717,9 +718,6 @@ async function sealMyProject(): Promise<void> {
   let preLedger = ""; let preSnap = "";
   try {
     try { flush(); snapshotSave(); } catch { /* נקודת-עקביות-כנה */ }
-    // גל-84 · state-הכלכלה-ב-gitignore (סערת-Fast-Refresh) — האטימה-מכריחה-הוספה:
-    // הספר/הסנאפשוט/ההסגרים/הקבלות-ממשיכים-להיאטמים-לכספת-בשלמותם (אפס-אובדן-ארכיון).
-    await git("/home/z/my-project", ["add", "-f", "mini-services/fleet-economy/state"]);
     const ts = Date.now();
     preLedger = path.join(STATE_DIR, `tmp-prepull-ledger-${ts}.jsonl`);
     preSnap = path.join(STATE_DIR, `tmp-prepull-snap-${ts}.json`);
