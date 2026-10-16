@@ -755,6 +755,11 @@ async function sealAll(): Promise<void> {
   } catch { /* כנה — ממשיכים-בלי-מנעול-אם-גם-הוא-נכשל */ }
   try {
     let sealed = 0;
+    // גל-84 · הקפאה-עצמית-לסבב-האטימות: המנוע-כותב-את-ספרו-שלו (state בביתו-החדש)
+    // → בלי-הקפאה, git-קורא-אובייקטים-בזמן-שינוי ("unstable object source data").
+    // flush+snapshotSave נקודת-עקביות, sealing-חוסם-tick/כתיבת-מדינה-עד-סוף-הסבב.
+    try { flush(); snapshotSave(); } catch { /* נקודת-עקביות-כנה */ }
+    sealing = true;
     // גל-83 · שחזור-הדוקטרינה: my-project (הספר-החי) נאטם-דרך-sealMyProject —
     // freeze (SIGSTOP-ל-next-server) + גיבוי-prepull + custody-restore-אחרי-הריבוז.
     // שריד-מיזוג: sealMyProject הוגדר-אך-מעולם-לא-נקרא — הלולאה-אטמה-אותו-יבש-בלי-הקפאה
@@ -762,6 +767,7 @@ async function sealAll(): Promise<void> {
     const rest = SEAL_REPOS.filter((d) => d !== "/home/z/my-project");
     try { await sealMyProject(); sealed++; } catch (e) { sealLog({ repo: "my-project", action: "custody-seal-fail", error: String(e).slice(0, 160) }); }
     for (const dir of rest) { if (await sealRepo(dir)) sealed++; }
+    sealing = false; // הפשרה — הכלכלה-חוזרת-לנשום
     sealLog({ action: "sweep-done" });
     // אירוע-אמת → עסקת-תשתית: סבב-אטימה הושלם (N מאגרים נאטמו בפועל)
     try {
