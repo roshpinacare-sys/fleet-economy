@@ -6,9 +6,14 @@
  *  2. boot על-הספר-הקנוני מהגיט (restored=true אחרת-כישלון).
  *  3. הכלכלה נושמת BEAT_SECONDS (טיקים, שכר, שירותים, AMM, מס — אפס-הדמיות).
  *  4. שער-אמת: /verify חייב ok:true + עוגנים = 3 בדיוק (צמיחה = תפר-חדש = כישלון-ריצה).
- *  5. איטום-המצב-חזרה-לגיט (commit+push, pull --rebase -X ours במקרה-מירוץ).
+ *  5. איטום-המצב-חזרה-לגיט (commit+push; מירוץ = RACE-LOST fail-closed — אפס-rebase-כוחני).
+ * גל-90 (agent-2 · 2026-10-17T23:40Z): חוק-ריבוי-צמתים — צומת-חי שני איטם את הספר מסנדבוקס-אחר
+ * (bd009ae · seq 135,439) בזמן שהמארח-המקומי ישן בין-פעימות. בפנקס-שרשרת-ליניארי שני-המשכים
+ * של אותו-parent בלתי-אפשריים — לכן: (0) לפני-זרימה אימוץ-FF של הקנוני; (6) במירוץ-איטום
+ * המפסיד נכנע-בכנות (reset לקנוני, exit 3) במקום `pull --rebase -X ours` שהיה עלול להשתיק
+ * שורות-פנקס חוקיות של הצומת-השני או לשבור שרשרת-hash.
  */
-import { spawn } from "child_process";
+import { spawn, execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -21,6 +26,30 @@ const PORT = 3016;
 const ANCHOR_BASELINE = 3; // פורנזיה 2026-10-17: תפרי-מיזוג היסטוריים seq 46335/55120/68276
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const g = (args) => { try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim(); } catch { return null; } };
+
+/* 0) git-first (חוק-הבעלים: הגיט הוא מקור-האמת) — אימוץ-קנוני לפני-כל-זרימה.
+ * מצב-מקומי שלא-נאטם מוותר-לקנוני (זרימה-מתחדשת בכל-פעימה; נגזרת-מחדש מה-boot).
+ */
+{
+  g(["fetch", "origin", "main"]);
+  const local = g(["rev-parse", "HEAD"]), remote = g(["rev-parse", "origin/main"]);
+  if (local && remote && local !== remote) {
+    const behind = g(["merge-base", "--is-ancestor", local, remote]);
+    if (behind === null) {
+      console.error("[economy-beat] FAIL-GIT-FIRST — הספר-המקומי מפוצל-מהקנוני — fail-closed (אין-מזלגים בספר-ריבוני)");
+      process.exit(3);
+    }
+    g(["checkout", "--", "state/"]);
+    const ff = g(["merge", "--ff-only", "origin/main"]);
+    if (ff === null) {
+      console.error("[economy-beat] FAIL-GIT-FIRST — אימוץ-FF נכשל — fail-closed");
+      process.exit(3);
+    }
+    console.log(`[economy-beat] git-first: אומץ-קנוני ${remote.slice(0, 7)} (מקומי-היה ${local.slice(0, 7)})`);
+  }
+}
+
 async function getJson(p) {
   try { const r = await fetch(`http://127.0.0.1:${PORT}${p}`); return await r.json(); } catch { return null; }
 }
@@ -85,8 +114,21 @@ await run("git", ["add", "state/ledger.jsonl", "state/snapshot.json", "state/sea
 await run("git", ["commit", "-q", "-m", `[economy-beat] seq=${m?.seq ?? "?"} (+${delta}) · עוגנים=${anchors}/${ANCHOR_BASELINE} · מאומת-מול-הספר`]);
 let push = await run("git", ["push", "origin", "HEAD"]);
 if (push.code !== 0) {
-  await run("git", ["-c", "rebase.autoStash=true", "pull", "--rebase", "-X", "ours", "origin", "main"]);
-  push = await run("git", ["push", "origin", "HEAD"]);
+  /* גל-90 חוק-מירוץ: אסור rebase -X ours — בפנקס-ליניארי שני-המשכים של אותו-parent
+   * לא-מתמזגים. אם-הקנוני זז (צומת-אחר איטם): RACE-LOST — נכנעים-בכנות לקנוני.
+   * הזרימה-שהפסידה מתחדשת בפעימה-הבאה (משכורות/שירותים/AMM — תוצרי-זרימה, לא-התחייבויות-חוץ).
+   */
+  await run("git", ["fetch", "origin", "main"]);
+  const base = await run("git", ["rev-parse", "HEAD~1"]);
+  const canon = await run("git", ["rev-parse", "origin/main"]);
+  const unchanged = base.o.trim() === canon.o.trim() && base.o.trim() !== "";
+  if (unchanged) {
+    push = await run("git", ["push", "origin", "HEAD"]); // לא-מירוץ — ניסיון-דחיפה-חוזר-אחד
+  } else {
+    await run("git", ["reset", "--hard", "origin/main"]);
+    console.log(`[economy-beat] איטום: RACE-LOST — צומת-אחר איטם-חוקית (${canon.o.trim().slice(0, 7)}); הספר-הקנוני אומץ; אפס-כפייה-על-השרשרת`);
+    process.exit(3);
+  }
 }
 console.log(`[economy-beat] איטום: ${push.code === 0 ? "נדחף-לגיט" : "push-fail: " + push.o.slice(-200)}`);
 process.exit(push.code === 0 ? 0 : 1);
