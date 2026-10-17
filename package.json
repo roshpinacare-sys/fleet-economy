@@ -5,6 +5,8 @@
   "description": "הכלכלה-הפנימית של הריבונות — החיילים/הצי/הסוכנים הם המשתמשים ברשת (תורת-משתמשי-פנים): אלפי-עד-מאות-אלפי עסקאות אמת ביום על ספר hash-chain, אפס תלות חוץ, אפס הדמיות",
   "scripts": {
     "dev": "bun index.ts",
-    "start": "bun index.ts"
+    "start": "bun index.ts",
+    "test": "bun test tests/",
+    "test:laws": "bun test tests/ledger-law.test.ts"
   }
 }

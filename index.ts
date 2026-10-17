@@ -22,6 +22,9 @@
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
+// גל-86 · blueprint A2 (agent-2): כסף-שלם BigInt µ¢ — אפס-פלואט בחישוב-כסף.
+// fromF משחזר בדיוק ערכי-6-ספרות מהספר/הסנאפשוט (אפס-שכתוב-היסטוריה).
+import { fromF, toF, ammOut as muAmmOut, splitFee } from "./lib/mu";
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
@@ -224,15 +227,20 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
 
 function ammSwap(user: string, asset: "USDS" | "SAOS", amountIn: number, reason: string): Tx | null {
   // קניית SAOS ב-USDS: usds נכנס → saos יוצא (מחיר קבוע-מכפלה, ללא עמלת-דליפה)
-  const k = pool.saos * pool.usds;
+  // גל-86 · µ¢: אריתמטיקת-בריכה מדויקת (BigInt) — רצפה לטובת-הבריכה,
+  // עמלה = amountIn − inAfterFee (שימור-מדויק בבנייה, לא חישוב-פלואט נפרד).
+  // שונות מה-פלואט הישן ≤ 2µ¢ לעסקה — זו בדיוק הדיוק שהמיגרציה קונה.
+  const amtMu = fromF(amountIn);
+  const inRMu = fromF(asset === "USDS" ? pool.usds : pool.saos);
+  const outRMu = fromF(asset === "USDS" ? pool.saos : pool.usds);
+  const outMu = muAmmOut(inRMu, outRMu, amtMu, FEE_BPS);
+  const half = outRMu / 2n;
+  if (outMu <= 0n || outMu > half) { rej(); return null; }
+  const { fee } = splitFee(amtMu, FEE_BPS);
   if (asset === "USDS") {
-    const out = pool.saos - k / (pool.usds + amountIn * (1 - FEE_BPS / 10_000));
-    if (out <= 0 || out > pool.saos * 0.5) { rej(); return null; }
-    return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: +(amountIn * FEE_BPS / 10_000).toFixed(6), price: +(pool.usds / pool.saos).toFixed(6), reason, outSaos: +out.toFixed(6) } as any);
+    return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: toF(fee), price: +(pool.usds / pool.saos).toFixed(6), reason, outSaos: toF(outMu) } as any);
   }
-  const out = pool.usds - k / (pool.saos + amountIn * (1 - FEE_BPS / 10_000));
-  if (out <= 0 || out > pool.usds * 0.5) { rej(); return null; }
-  return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: +(amountIn * FEE_BPS / 10_000).toFixed(6), price: +(pool.usds / pool.saos).toFixed(6), reason, outUsds: +out.toFixed(6) } as any);
+  return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: toF(fee), price: +(pool.usds / pool.saos).toFixed(6), reason, outUsds: toF(outMu) } as any);
 }
 
 /* ── מחולל-העסקאות: המשתמשים-הפנימיים משתמשים בכלים בזרימה חכמה ────────────── */
@@ -331,9 +339,15 @@ function tick() {
     }
     // גל-83 · איסוף-עמלות (כל-150-טיקים): עמלות-הבריכה (הכנסת-הרשת) זורמות-לכספת
     if (tickNo % 150 === 0 && pool.feesUsds >= 1) {
+      // גל-86 · תיקון-עמלות (agent-2): איסוף חייב גם את יתרת-המודול של הבריכה
+      // (העמלות נכנסו לשרותי-הבריכה) + סנכרון bal("pool") — בדחייה-כנה המונה חוזר
+      // (לפני-כן: מונה מאופס גם-בדחייה = הכנסת-רשת נעלמה מהמדידה).
       const amt = round6(pool.feesUsds);
+      const feesBefore = pool.feesUsds;
       pool.feesUsds = 0;
-      apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: "pool", to: "treasury", asset: "USDS", amount: amt, reason: "איסוף-עמלות-בריכה → כספת" });
+      const collected = apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: "pool", to: "treasury", asset: "USDS", amount: amt, reason: "איסוף-עמלות-בריכה → כספת" });
+      if (collected) { pool.usds -= amt; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
+      else pool.feesUsds = feesBefore;
     }
     // גל-85 · מווסת-אדפטיבי: 14-18 ניסיונות-בטיק (מהיר-על-ידי-קבלה בפועל, לא על-ידי-תקווה)
     const n = nBase + Math.floor(Math.random() * 5);
@@ -386,9 +400,13 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         } else {
           (from as any)[field] -= t.amount;
           if (t.kind === "swap") {
+            // גל-86 · תיקון-סימטריית-replay (agent-2): ה-replay חייב לשקף את apply (גל-85)
+            // מילה-במילה — התוצר לסוחר (from), ולא ל-bal("pool") (שהייתה חזרת-הפנטום:
+            // pool.saos -= out ואז bal("pool").saos += out = התוצר נעלם מהמחזור).
+            // נעול ע"י tests/ledger-law.test.ts · סימטריית apply/replay.
             const feeAmt = t.fee ?? 0;
-            if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= t.outSaos; to.saos += t.outSaos; pool.feesUsds += feeAmt; }
-            else { pool.saos += t.amount; pool.usds -= t.outUsds; to.usds += t.outUsds; pool.feesSaos += feeAmt; }
+            if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= t.outSaos; from.saos += t.outSaos; pool.feesUsds += feeAmt; }
+            else { pool.saos += t.amount; pool.usds -= t.outUsds; from.usds += t.outUsds; pool.feesSaos += feeAmt; }
           } else { (to as any)[field] += t.amount; }
         }
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
