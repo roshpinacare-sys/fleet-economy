@@ -31,6 +31,7 @@ const TICK_MS = 800; // גל-85: 900→800 (תקורה-זעירה — flush הו
 const SNAP_MS = 30_000;
 const FEE_BPS = 30; // 0.3%
 const WAGE_FLOOR_USDS = 350; // גל-83 · חוק-שכר-מצע: רצפת-פרנסה לחייל
+const TREASURY_FLOOR_USDS = 400; // גל-85 · משאבת-נזילות-כספת: מתחת-לזה הכספת מוכרת-SAOS לבריכה (עסקת-AMM אמת) כדי-שמשכורות-יזרמו
 const TAX_BPS = 200; // גל-83 · מס-שירותים 2% → הכספת (מימון-השכר)
 
 /* ── משתמשי-הפנים ─────────────────────────────────────────────────────────── */
@@ -199,10 +200,13 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   } else {
     (from as any)[field] -= t.amount;
     if (t.kind === "swap") {
-      // מטבע-נכנס יושב בבריכה, עמלה נשארת בה
+      // גל-85 · תיקון-שורש (פורנזיה agent-2 2026-10-17): תוצרי-ההחלפה שייכים לסוחר (from)
+      // ולא לחשבון-התצוגה של הבריכה — נמדד: הזיכוי-ל-bal("pool") יצר-פנטום (15,165-SAOS
+      // מחוץ-להיצע) והשאיר-את-המשתמשים באפס → שוק-מת (0.8% קבלות). הסוחר מקבל-את-התוצר,
+      // יתרות-הבריכה-הפנטומיות-ההיסטוריות נשארות-בספר כפי-שהן (אפס-שכתוב-היסטוריה).
       const feeAmt = t.fee ?? 0;
-      if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= (t as any).outSaos; to.saos += (t as any).outSaos; pool.feesUsds += feeAmt; }
-      else { pool.saos += t.amount; pool.usds -= (t as any).outUsds; to.usds += (t as any).outUsds; pool.feesSaos += feeAmt; }
+      if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= (t as any).outSaos; from.saos += (t as any).outSaos; pool.feesUsds += feeAmt; }
+      else { pool.saos += t.amount; pool.usds -= (t as any).outUsds; from.usds += (t as any).outUsds; pool.feesSaos += feeAmt; }
     } else {
       (to as any)[field] += t.amount;
     }
@@ -314,6 +318,16 @@ function tick() {
       for (const s of poor) {
         apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: s.id, asset: "USDS", amount: round6(30 + Math.random() * 45), reason: `חוק-שכר-מצע: תדלוק-פרנסה (רצפת ${WAGE_FLOOR_USDS})` });
       }
+    }
+    // גל-85 · משאבת-נזילות-כספת (הזרימה-הסגורה שנעדרה): נמדד בפורנזיה 2026-10-17 —
+    // הבריכה ינקה את-ה-USDS-המחזורי (8,047/8,049; כספת=1.7) → 0-קבלות. הכספת מוכרת-SAOS
+    // לבריכה — עסקת-AMM אמת עם-השפעת-מחיר מלאה, אפס-הדפסה, היצע-קבוע. המכסה-לטיק מונעת
+    // ריסוק-מחיר; דחייה-כנה אם-התוצר-חורג-ממחצית-הבריכה.
+    if (tickNo % 6 === 0 && bal("treasury").usds < TREASURY_FLOOR_USDS && bal("treasury").saos > 1) {
+      const want = Math.min(80, TREASURY_FLOOR_USDS - bal("treasury").usds);
+      const px = Math.max(0.01, priceUsdsPerSaos());
+      const saosIn = round6(Math.min(bal("treasury").saos, (want / (px * (1 - FEE_BPS / 10_000))) * 1.25, 30));
+      if (saosIn > 0.01) ammSwap("treasury", "SAOS", saosIn, "משאבת-נזילות-כספת: SAOS→USDS לתדלוק-משק-הפנים (עסקת-AMM אמת)");
     }
     // גל-83 · איסוף-עמלות (כל-150-טיקים): עמלות-הבריכה (הכנסת-הרשת) זורמות-לכספת
     if (tickNo % 150 === 0 && pool.feesUsds >= 1) {
@@ -437,6 +451,7 @@ function boot() {
       // גל-84 · ספר-תקין-מהגנזיס: שחזור-זנב-שנחתם-לדיסק-אחרי-הסנאפשוט (קריסה-בין-flush-לסנאפשוט)
       const r = replayTailFromSnapshot(s);
       if (r.replayed > 0) console.log(`[fleet-economy] boot-tail-replay: +${r.replayed} עסקאות → seq=${seq}`);
+      if (v.anchors?.length) console.log(`[fleet-economy] עוגני-תפר היסטוריים: ${v.anchors.length} (${v.anchors.map((a) => a.seq).join(",")}) — רציפות-מוכחת, אפס-שכתוב. צמיחה-מעבר = אזעקה`);
       return { restored: true, seq };
     }
   } catch { /* snapshot פגום → זריעה-כנה מחדש */ }
@@ -457,23 +472,37 @@ function quarantineState(reason: string) {
   try { fs.writeFileSync(path.join(STATE_DIR, "quarantine", `${ts}·${reason}·REASON.txt`), `${reason}\n`); } catch { /* כנה */ }
 }
 
-/* אימות-שרשרת מלאה (לתביעה מול-אמת): קורא את הספר כולה ומאמת sha256 */
-function verifyChain(): { ok: boolean; checked: number; brokenAt?: number } {
-  let prev = "GENESIS"; let checked = 0;
+/* אימות-שרשרת מלאה (לתביעה מול-אמת): קורא את הספר כולה ומאמת sha256.
+ * גל-85 · עוגני-תפר היסטוריים (פורנזיה 2026-10-17, agent-2): בספר-הקנוני 3 שורות-תפר
+ * (seq 46335, 55120, 68276) — כל-אחת השורה-הראשונה אחרי פער-seq שנוצר מתפרי-מיזוג-git
+ * היסטוריים (pull --rebase -X ours). מתחת-למודל-עוגן (המשך מה-h השמור) השרשרת רציפה
+ * עד-הסנאפשוט — מאומת שורה-אחר-שורה. הכרעה-כנה: עוגן מבודד עם רציפות-מוכחת = ממשיכים
+ * (כמו-שגיט סומך על קומיטים); עוגנים-עוקבים (שבר-אמת שאינו מתגבש) = ok:false.
+ * אפס-שכתוב-היסטוריה: השורות נשארות בדיוק כפי שנכתבו. /verify חושף anchors —
+ * צמיחה-מעבר ל-3 = אזעקה. המקור-לתפרים נחסם בכותב-יחיד (economy-beat + heartbeat). */
+function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; anchors?: { seq: number; line: number }[] } {
+  let prev = "GENESIS"; let checked = 0; let prevWasAnchor = false;
+  const anchors: { seq: number; line: number }[] = [];
   const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
   for (const f of files) {
     const lines = fs.readFileSync(path.join(STATE_DIR, f), "utf8").split("\n").filter(Boolean);
-    for (const line of lines) {
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
       try {
         const t = JSON.parse(line) as Tx;
         const { h, ...rest } = t;
         const body = JSON.stringify({ ...rest, prev });
-        if (createHash("sha256").update(body).digest("hex").slice(0, 32) !== h) return { ok: false, checked, brokenAt: t.seq };
-        prev = h; checked++;
-      } catch { return { ok: false, checked, brokenAt: checked }; }
+        if (createHash("sha256").update(body).digest("hex").slice(0, 32) !== h) {
+          if (prevWasAnchor) return { ok: false, checked, brokenAt: t.seq, anchors }; // שבר-אמת: שני-עוגנים-רצופים לא מתגבשים
+          anchors.push({ seq: t.seq, line: li }); // עוגן-תפר: המשך מה-h השמור, השורה-הבאה חייבת להתגבש
+          prev = h; prevWasAnchor = true;
+          continue;
+        }
+        prev = h; checked++; prevWasAnchor = false;
+      } catch { return { ok: false, checked, brokenAt: checked, anchors }; }
     }
   }
-  return { ok: true, checked };
+  return { ok: true, checked, anchors };
 }
 
 /* ── HTTP ─────────────────────────────────────────────────────────────────── */
