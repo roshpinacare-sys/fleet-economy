@@ -1,0 +1,48 @@
+# ECONOMY-BEAT — הכלכלה-הפנימית קמה-ועובדת על-תשתית-ענן (גל-85 · agent-2 · 2026-10-17)
+#
+# הריפו הוא הבית — הענן הוא הבונה. כל-ריצה:
+#   מנעול-כותב-יחיד (writer-heartbeat) → boot על-הספר-הקנוני מהגיט → הכלכלה נושמת
+#   BEAT_SECONDS (שכר/שירותים/AMM/מס — אפס-הדמיות) → שער-אמת (/verify: שרשרת + עוגנים
+#   = 3 בדיוק; צמיחה = תפר-חדש = כישלון) → איטום-המצב-חזרה-לגיט. כל-מספר-בסיכום נמדד.
+#
+# שורש-התפרים ההיסטוריים (פורנזיה 2026-10-17): שני-כותבים על ספר-אחד (סנדבוקס + ענן).
+# מעכשיו: heartbeat קובע כותב-אחד. הסנדבוקס יכול-להמשיך-לכתוב רק-אם-הוא מאמץ-את-אותו-מנעול.
+#
+# תדירות-כנה: ריפו-פרטי = מכבת-Actions מתוקצבת (R71). 2-עוגני-cron כל-4 שעות
+# (~12 ריצות/יום × ~4 דק' ≈ 1,400 דקות/חודש) + הזנקה-ידנית תמיד-אפשרית. אם-ה-scheduler
+# משתיק רישום (תופעה-מדודה בצי) — שני-העוגנים מקטינים-נזק; ה-דיספאץ'-הידני לא-נפגע.
+name: economy-beat
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "13 */4 * * *"   # עוגן 1 (דקה-אי-זוגית — היגיינת-cron של הצי)
+    - cron: "43 */4 * * *"   # עוגן 2 — גיבוי לשעת-השתקה
+
+permissions:
+  contents: write
+
+concurrency:
+  group: economy-beat
+  cancel-in-progress: false
+
+jobs:
+  beat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout the book
+        uses: actions/checkout@v4
+
+      - name: Bun 1.3.14 (גרסת-הבית)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Beat (boot → flow → verify → seal)
+        env:
+          BEAT_SECONDS: '180'
+        run: |
+          git config user.name "economy-beat[bot]"
+          git config user.email "economy-beat[bot]@users.noreply.github.com"
+          bun run-economy-beat.mjs
