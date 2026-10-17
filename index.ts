@@ -24,7 +24,9 @@ import fs from "fs";
 import path from "path";
 // גל-86 · blueprint A2 (agent-2): כסף-שלם BigInt µ¢ — אפס-פלואט בחישוב-כסף.
 // fromF משחזר בדיוק ערכי-6-ספרות מהספר/הסנאפשוט (אפס-שכתוב-היסטוריה).
-import { fromF, toF, ammOut as muAmmOut, splitFee } from "./lib/mu";
+// גל-87 · מיגרציית-יתרות: כל-היתרות (balances) והבריכה (pool) חיים-כ-BigInt µ¢
+// בזיכרון; הסידור (פנקס + snapshot) נשאר מספרי-6-ספרות זהה-בייטים — רצף-hash נשמר.
+import { fromF, toF, ammOut as muAmmOut, splitFee, type Mu } from "./lib/mu";
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
@@ -70,7 +72,14 @@ const TREASURY_USDS = 60_000;
 const POOL_SAOS = 8_000;
 const POOL_USDS = 8_030; // מחיר-פתיחה ≈ 1.0038 USDS/SAOS
 
-type Balances = Map<string, { usds: number; saos: number; saosStaked: number }>;
+type MuBal = { usds: Mu; saos: Mu; saosStaked: Mu }; // גל-87 · יתרות = µ¢ שלם
+// גל-87 · גשר-קריאה מה-snapshot ההיסטורי (מספרי-6-ספרות) → µ¢ מדויק
+const balFromSnap = (v: any): MuBal => ({
+  usds: fromF(Number(v?.usds ?? 0)),
+  saos: fromF(Number(v?.saos ?? 0)),
+  saosStaked: fromF(Number(v?.saosStaked ?? 0)),
+});
+type Balances = Map<string, MuBal>;
 type Tx = {
   seq: number; ts: number; kind: string; from: string; to: string;
   asset: "USDS" | "SAOS"; amount: number; fee?: number; price?: number;
@@ -78,7 +87,8 @@ type Tx = {
 };
 
 let balances: Balances = new Map();
-let pool = { saos: POOL_SAOS, usds: POOL_USDS, feesUsds: 0, feesSaos: 0 };
+// גל-87 · הבריכה כמודול-µ¢ — אפס-פלואט במסלול-הכסף כולו
+let pool = { saos: fromF(POOL_SAOS), usds: fromF(POOL_USDS), feesUsds: 0n, feesSaos: 0n };
 let seq = 0;
 let lastH = "GENESIS";
 let tickNo = 0; // גל-83 · מונה-טיקים לחוקים-הפיסקליים (שכר-מצע/איסוף-עמלות)
@@ -125,12 +135,14 @@ function rememberRef(ref: string) {
  * ליעד-קטן (25-USDS) בעסקת-משכורת אמת בספר (מתועדת, נחתמת בשרשרת). */
 const FLOAT_TARGET = 25;
 function refillFloatIfEmpty(payer: string, needed: number): boolean {
+  const needMu = fromF(needed);
   const b = bal(payer);
-  if (b.usds >= needed) return true;
-  const fill = round6(FLOAT_TARGET - b.usds);
-  if (fill <= 0) return b.usds >= needed;
+  if (b.usds >= needMu) return true;
+  const fillMu = fromF(FLOAT_TARGET) - b.usds;
+  if (fillMu <= 0n) return b.usds >= needMu;
+  const fill = toF(fillMu);
   const r = apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: payer, asset: "USDS", amount: fill, reason: `תדלוק-צף-אגרות-אירועים (${payer})` });
-  return r !== null && bal(payer).usds >= needed;
+  return r !== null && bal(payer).usds >= needMu;
 }
 /* הכנסת-אירוע אמת לספר. מחזיר Tx|null וסופר בכנות. */
 function ingestEvent(v: {
@@ -158,7 +170,7 @@ function ingestEvent(v: {
 
 function bal(id: string) {
   let b = balances.get(id);
-  if (!b) { b = { usds: 0, saos: 0, saosStaked: 0 }; balances.set(id, b); }
+  if (!b) { b = { usds: 0n, saos: 0n, saosStaked: 0n }; balances.set(id, b); }
   return b;
 }
 
@@ -190,28 +202,30 @@ function rotate() {
   try { fs.renameSync(LEDGER, dst); ledgerFileNo++; ledgerLines = 0; } catch { /* honest */ }
 }
 
-/* ── החלה עם איזון-כפול fail-closed ───────────────────────────────────────── */
+/* ── החלה עם איזון-כפול fail-closed (גל-87 · כל-האריתמטיקה = BigInt µ¢;
+ *  ערכי-tx (amount/fee/out) נקראים-כמספרי-6-ספרות דרך-fromF — הספר-אינו-משתנה) ── */
 function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   const from = bal(t.from), to = bal(t.to);
   const field = t.asset === "USDS" ? "usds" : "saos";
-  if ((from as any)[field] < t.amount) { rej(); return null; }
+  const amtMu = fromF(t.amount);
+  if ((from as any)[field] < amtMu) { rej(); return null; }
   if (t.kind === "stake") {
-    from.saos -= t.amount; from.saosStaked += t.amount;
+    from.saos -= amtMu; from.saosStaked += amtMu;
   } else if (t.kind === "unstake") {
-    if (from.saosStaked < t.amount) { rej(); return null; }
-    from.saosStaked -= t.amount; to.saos += t.amount;
+    if (from.saosStaked < amtMu) { rej(); return null; }
+    from.saosStaked -= amtMu; to.saos += amtMu;
   } else {
-    (from as any)[field] -= t.amount;
+    (from as any)[field] -= amtMu;
     if (t.kind === "swap") {
       // גל-85 · תיקון-שורש (פורנזיה agent-2 2026-10-17): תוצרי-ההחלפה שייכים לסוחר (from)
       // ולא לחשבון-התצוגה של הבריכה — נמדד: הזיכוי-ל-bal("pool") יצר-פנטום (15,165-SAOS
       // מחוץ-להיצע) והשאיר-את-המשתמשים באפס → שוק-מת (0.8% קבלות). הסוחר מקבל-את-התוצר,
       // יתרות-הבריכה-הפנטומיות-ההיסטוריות נשארות-בספר כפי-שהן (אפס-שכתוב-היסטוריה).
-      const feeAmt = t.fee ?? 0;
-      if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= (t as any).outSaos; from.saos += (t as any).outSaos; pool.feesUsds += feeAmt; }
-      else { pool.saos += t.amount; pool.usds -= (t as any).outUsds; from.usds += (t as any).outUsds; pool.feesSaos += feeAmt; }
+      const feeMu = fromF(t.fee ?? 0);
+      if (t.asset === "USDS") { pool.usds += amtMu; pool.saos -= fromF((t as any).outSaos); from.saos += fromF((t as any).outSaos); pool.feesUsds += feeMu; }
+      else { pool.saos += amtMu; pool.usds -= fromF((t as any).outUsds); from.usds += fromF((t as any).outUsds); pool.feesSaos += feeMu; }
     } else {
-      (to as any)[field] += t.amount;
+      (to as any)[field] += amtMu;
     }
   }
   byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
@@ -229,18 +243,18 @@ function ammSwap(user: string, asset: "USDS" | "SAOS", amountIn: number, reason:
   // קניית SAOS ב-USDS: usds נכנס → saos יוצא (מחיר קבוע-מכפלה, ללא עמלת-דליפה)
   // גל-86 · µ¢: אריתמטיקת-בריכה מדויקת (BigInt) — רצפה לטובת-הבריכה,
   // עמלה = amountIn − inAfterFee (שימור-מדויק בבנייה, לא חישוב-פלואט נפרד).
-  // שונות מה-פלואט הישן ≤ 2µ¢ לעסקה — זו בדיוק הדיוק שהמיגרציה קונה.
+  // גל-87 · הבריכה-עצמה חיה-ב-µ¢ — אפס-המרות-פלואט בקלט/פלט-פנימי.
   const amtMu = fromF(amountIn);
-  const inRMu = fromF(asset === "USDS" ? pool.usds : pool.saos);
-  const outRMu = fromF(asset === "USDS" ? pool.saos : pool.usds);
+  const inRMu = asset === "USDS" ? pool.usds : pool.saos;
+  const outRMu = asset === "USDS" ? pool.saos : pool.usds;
   const outMu = muAmmOut(inRMu, outRMu, amtMu, FEE_BPS);
   const half = outRMu / 2n;
   if (outMu <= 0n || outMu > half) { rej(); return null; }
   const { fee } = splitFee(amtMu, FEE_BPS);
   if (asset === "USDS") {
-    return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: toF(fee), price: +(pool.usds / pool.saos).toFixed(6), reason, outSaos: toF(outMu) } as any);
+    return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: toF(fee), price: +(toF(pool.usds) / toF(pool.saos)).toFixed(6), reason, outSaos: toF(outMu) } as any);
   }
-  return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: toF(fee), price: +(pool.usds / pool.saos).toFixed(6), reason, outUsds: toF(outMu) } as any);
+  return apply({ seq: seq + 1, ts: Date.now(), kind: "swap", from: user, to: "pool", asset, amount: amountIn, fee: toF(fee), price: +(toF(pool.usds) / toF(pool.saos)).toFixed(6), reason, outUsds: toF(outMu) } as any);
 }
 
 /* ── מחולל-העסקאות: המשתמשים-הפנימיים משתמשים בכלים בזרימה חכמה ────────────── */
@@ -271,11 +285,11 @@ function spawnTx(): Tx | null {
     // גל-83 · זרימה-חוזרת: צמתי-הצי קונים-שירותים מהחיילים
     // גל-85 · משלם-משוקלל-עושר: חלק-הצמתים-בתשלום נגזר-מחלקתם-בהון-המחזורי בפועל
     // (מי-שצבר-תשתית משלם-יותר — הכסף-לא-נתקע-אצל-אף-אחד; חלון-מוגן 20%-50%)
-    let nodeW = 0, solW = 0;
+    let nodeW = 0n, solW = 0n; // גל-87 · משקלי-עושר ב-µ¢; החלטת-המשלם = פלואט (תצוגה/החלטה-בלבד)
     for (const nd of FLEET_NODES) { const b = bal(nd.id); nodeW += b.usds + b.saos; }
     for (const sl of SOLDIERS) { const b = bal(sl.id); solW += b.usds + b.saos; }
     const totW = nodeW + solW;
-    const nodeShare = totW > 0 ? Math.min(0.5, Math.max(0.2, nodeW / totW)) : 0.25;
+    const nodeShare = totW > 0n ? Math.min(0.5, Math.max(0.2, Number(nodeW) / Number(totW))) : 0.25;
     const payer = Math.random() < nodeShare ? pick(FLEET_NODES).id : soldier;
     const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "service", from: payer, to, asset: "USDS", amount: round6(svc.price * units), reason: `${svc.name} · ${units}-${svc.unit}`, ref: `svc-${Date.now()}-${Math.floor(Math.random() * 1e4)}` });
     // גל-83 · מס-שירותים 2%: עסקה-נפרדת-וחתומה (מימון-אמיתי-לכספת שתוכל-לשלם-שכר)
@@ -291,13 +305,15 @@ function spawnTx(): Tx | null {
     const b = bal(soldier);
     const stake = Math.random() < 0.6;
     if (stake) {
-      const amt = round6(Math.min(b.saos, 0.5 + Math.random() * 6));
-      if (amt <= 0) { rej(); return null; }
-      return apply({ seq: seq + 1, ts: Date.now(), kind: "stake", from: soldier, to: soldier, asset: "SAOS", amount: amt, reason: "סטייק-SAOS לאבטחת-הרשת הפנימית" });
+      const want = fromF(round6(0.5 + Math.random() * 6));
+      const amtMu = b.saos < want ? b.saos : want;
+      if (amtMu <= 0n) { rej(); return null; }
+      return apply({ seq: seq + 1, ts: Date.now(), kind: "stake", from: soldier, to: soldier, asset: "SAOS", amount: toF(amtMu), reason: "סטייק-SAOS לאבטחת-הרשת הפנימית" });
     }
-    const amt = round6(Math.min(b.saosStaked, 0.3 + Math.random() * 4));
-    if (amt <= 0) { rej(); return null; }
-    return apply({ seq: seq + 1, ts: Date.now(), kind: "unstake", from: soldier, to: soldier, asset: "SAOS", amount: amt, reason: "ביטול-סטייק לצורך-תפעול" });
+    const want = fromF(round6(0.3 + Math.random() * 4));
+    const amtMu = b.saosStaked < want ? b.saosStaked : want;
+    if (amtMu <= 0n) { rej(); return null; }
+    return apply({ seq: seq + 1, ts: Date.now(), kind: "unstake", from: soldier, to: soldier, asset: "SAOS", amount: toF(amtMu), reason: "ביטול-סטייק לצורך-תפעול" });
   }
   if (r < 0.94) { // תשלום-תשתית: חייל משלם לצומת-צי
     const node = pick(FLEET_NODES).id;
@@ -322,7 +338,8 @@ function tick() {
     if (tickNo % 12 === 0) {
       // גל-85 · שכר-מצע מדורג: כל-חייל-מתחת-הרצפה מתודלק (לא אחד-נבחר) —
       // נדרש כי ניסיונות-הפר-טיק גדלו ×4 (נמדד: ריפוד-יחיד = 33% דחיות)
-      const poor = SOLDIERS.filter((s) => bal(s.id).usds < WAGE_FLOOR_USDS);
+      const floorMu = fromF(WAGE_FLOOR_USDS);
+      const poor = SOLDIERS.filter((s) => bal(s.id).usds < floorMu);
       for (const s of poor) {
         apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: s.id, asset: "USDS", amount: round6(30 + Math.random() * 45), reason: `חוק-שכר-מצע: תדלוק-פרנסה (רצפת ${WAGE_FLOOR_USDS})` });
       }
@@ -331,23 +348,25 @@ function tick() {
     // הבריכה ינקה את-ה-USDS-המחזורי (8,047/8,049; כספת=1.7) → 0-קבלות. הכספת מוכרת-SAOS
     // לבריכה — עסקת-AMM אמת עם-השפעת-מחיר מלאה, אפס-הדפסה, היצע-קבוע. המכסה-לטיק מונעת
     // ריסוק-מחיר; דחייה-כנה אם-התוצר-חורג-ממחצית-הבריכה.
-    if (tickNo % 6 === 0 && bal("treasury").usds < TREASURY_FLOOR_USDS && bal("treasury").saos > 1) {
-      const want = Math.min(80, TREASURY_FLOOR_USDS - bal("treasury").usds);
+    if (tickNo % 6 === 0 && bal("treasury").usds < fromF(TREASURY_FLOOR_USDS) && bal("treasury").saos > 1n) {
+      // גל-87 · התכנון-כאן תצוגתי/החלטתי (פלואט); האכיפה-האמיתית = ammSwap+apply ב-µ¢
+      const wantMu = fromF(80) < fromF(TREASURY_FLOOR_USDS) - bal("treasury").usds ? fromF(80) : fromF(TREASURY_FLOOR_USDS) - bal("treasury").usds;
+      const want = toF(wantMu);
       const px = Math.max(0.01, priceUsdsPerSaos());
-      const saosIn = round6(Math.min(bal("treasury").saos, (want / (px * (1 - FEE_BPS / 10_000))) * 1.25, 30));
+      const saosIn = round6(Math.min(toF(bal("treasury").saos), (want / (px * (1 - FEE_BPS / 10_000))) * 1.25, 30));
       if (saosIn > 0.01) ammSwap("treasury", "SAOS", saosIn, "משאבת-נזילות-כספת: SAOS→USDS לתדלוק-משק-הפנים (עסקת-AMM אמת)");
     }
     // גל-83 · איסוף-עמלות (כל-150-טיקים): עמלות-הבריכה (הכנסת-הרשת) זורמות-לכספת
-    if (tickNo % 150 === 0 && pool.feesUsds >= 1) {
+    if (tickNo % 150 === 0 && pool.feesUsds >= fromF(1)) {
       // גל-86 · תיקון-עמלות (agent-2): איסוף חייב גם את יתרת-המודול של הבריכה
       // (העמלות נכנסו לשרותי-הבריכה) + סנכרון bal("pool") — בדחייה-כנה המונה חוזר
       // (לפני-כן: מונה מאופס גם-בדחייה = הכנסת-רשת נעלמה מהמדידה).
-      const amt = round6(pool.feesUsds);
-      const feesBefore = pool.feesUsds;
-      pool.feesUsds = 0;
-      const collected = apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: "pool", to: "treasury", asset: "USDS", amount: amt, reason: "איסוף-עמלות-בריכה → כספת" });
-      if (collected) { pool.usds -= amt; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
-      else pool.feesUsds = feesBefore;
+      // גל-87 · µ¢: amtMu מדויק — toF(amtMu) שומר-6-ספרות זהות (הפיכות-מלאה).
+      const amtMu = pool.feesUsds;
+      pool.feesUsds = 0n;
+      const collected = apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: "pool", to: "treasury", asset: "USDS", amount: toF(amtMu), reason: "איסוף-עמלות-בריכה → כספת" });
+      if (collected) { pool.usds -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
+      else pool.feesUsds = amtMu;
     }
     // גל-85 · מווסת-אדפטיבי: 14-18 ניסיונות-בטיק (מהיר-על-ידי-קבלה בפועל, לא על-ידי-תקווה)
     const n = nBase + Math.floor(Math.random() * 5);
@@ -368,11 +387,12 @@ function tick() {
 
 /* ── אתחול מהדיסק (snapshot + אימות-שרשרת על-הזנב) ────────────────────────── */
 function seed() {
-  bal("treasury").usds = TREASURY_USDS;
-  bal("treasury").saos = SAOS_SUPPLY - POOL_SAOS;
+  // גל-87 · זריעה-מדויקת: ערכי-פלואט עוברים-round6 ואז-fromF — יתרות-µ¢-שלמות-מהלידה
+  bal("treasury").usds = fromF(TREASURY_USDS);
+  bal("treasury").saos = fromF(SAOS_SUPPLY - POOL_SAOS);
   bal("pool").usds = pool.usds; bal("pool").saos = pool.saos;
-  for (const s of SOLDIERS) { bal(s.id).usds = 900 + Math.random() * 600; bal(s.id).saos = 20 + Math.random() * 30; }
-  for (const n2 of FLEET_NODES) { bal(n2.id).usds = 300 + Math.random() * 200; }
+  for (const s of SOLDIERS) { bal(s.id).usds = fromF(round6(900 + Math.random() * 600)); bal(s.id).saos = fromF(round6(20 + Math.random() * 30)); }
+  for (const n2 of FLEET_NODES) { bal(n2.id).usds = fromF(round6(300 + Math.random() * 200)); }
   // היצע-כולל נשמר: סכום-היתרות + הבריכה = ההצעה הקבועה
 }
 
@@ -392,22 +412,23 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         if (createHash("sha256").update(JSON.stringify({ ...rest, prev })).digest("hex").slice(0, 32) !== h) { seamIdx = i; seamFile = f; break outer; }
         const from = bal(t.from), to = bal(t.to);
         const field = t.asset === "USDS" ? "usds" : "saos";
-        if ((from as any)[field] < t.amount) { seamIdx = i; seamFile = f; break outer; } // מצב-לא-עקבי-עם-הספר → תפר-כנה
-        if (t.kind === "stake") { from.saos -= t.amount; from.saosStaked += t.amount; }
+        const amtMu = fromF(t.amount); // גל-87 · אריתמטיקה-זהה-מילה-במילה-ל-apply
+        if ((from as any)[field] < amtMu) { seamIdx = i; seamFile = f; break outer; } // מצב-לא-עקבי-עם-הספר → תפר-כנה
+        if (t.kind === "stake") { from.saos -= amtMu; from.saosStaked += amtMu; }
         else if (t.kind === "unstake") {
-          if ((from.saosStaked ?? 0) < t.amount) { seamIdx = i; seamFile = f; break outer; }
-          from.saosStaked -= t.amount; to.saos += t.amount;
+          if (from.saosStaked < amtMu) { seamIdx = i; seamFile = f; break outer; }
+          from.saosStaked -= amtMu; to.saos += amtMu;
         } else {
-          (from as any)[field] -= t.amount;
+          (from as any)[field] -= amtMu;
           if (t.kind === "swap") {
             // גל-86 · תיקון-סימטריית-replay (agent-2): ה-replay חייב לשקף את apply (גל-85)
             // מילה-במילה — התוצר לסוחר (from), ולא ל-bal("pool") (שהייתה חזרת-הפנטום:
             // pool.saos -= out ואז bal("pool").saos += out = התוצר נעלם מהמחזור).
             // נעול ע"י tests/ledger-law.test.ts · סימטריית apply/replay.
-            const feeAmt = t.fee ?? 0;
-            if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= t.outSaos; from.saos += t.outSaos; pool.feesUsds += feeAmt; }
-            else { pool.saos += t.amount; pool.usds -= t.outUsds; from.usds += t.outUsds; pool.feesSaos += feeAmt; }
-          } else { (to as any)[field] += t.amount; }
+            const feeMu = fromF(t.fee ?? 0);
+            if (t.asset === "USDS") { pool.usds += amtMu; pool.saos -= fromF(t.outSaos); from.saos += fromF(t.outSaos); pool.feesUsds += feeMu; }
+            else { pool.saos += amtMu; pool.usds -= fromF(t.outUsds); from.usds += fromF(t.outUsds); pool.feesSaos += feeMu; }
+          } else { (to as any)[field] += amtMu; }
         }
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
         byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
@@ -438,11 +459,18 @@ function boot() {
   try {
     if (fs.existsSync(SNAP)) {
       const s = JSON.parse(fs.readFileSync(SNAP, "utf8"));
-      balances = new Map(Object.entries(s.balances ?? {}).map(([k, v]) => [k, v as any]));
-      pool = s.pool ?? pool; seq = s.seq ?? 0; lastH = s.lastH ?? lastH;
+      // גל-87 · קריאת-snapshot היסטורי (מספרי-6-ספרות) → יתרות-µ¢-מדויקות (אפס-שכתוב)
+      balances = new Map(Object.entries(s.balances ?? {}).map(([k, v]) => [k, balFromSnap(v)]));
+      pool = s.pool
+        ? { saos: fromF(Number(s.pool.saos ?? 0)), usds: fromF(Number(s.pool.usds ?? 0)), feesUsds: fromF(Number(s.pool.feesUsds ?? 0)), feesSaos: fromF(Number(s.pool.feesSaos ?? 0)) }
+        : { saos: fromF(POOL_SAOS), usds: fromF(POOL_USDS), feesUsds: 0n, feesSaos: 0n };
+      seq = s.seq ?? 0; lastH = s.lastH ?? lastH;
       byKind = s.byKind ?? {}; byAccount = s.byAccount ?? {}; rejected = s.rejected ?? 0; errors = s.errors ?? 0;
       ledgerFileNo = s.ledgerFileNo ?? 0;
       ingestOk = s.ingestOk ?? 0; ingestDedup = s.ingestDedup ?? 0; ingestFailed = s.ingestFailed ?? 0; ingestBad = s.ingestBad ?? 0;
+      // גל-87 · שימור-המדידה: attemptsTotal חייב לשרוד עלייה — בלי-זה acceptancePct מוצג
+      // שלילי-מטופש (rejected היסטורי מול attempts צעירים). נמדד: -129163.1% אחרי-עלייה.
+      if (typeof s.attemptsTotal === "number" && s.attemptsTotal > attemptsTotal) attemptsTotal = s.attemptsTotal;
       // dedup שורד-הפעלה-מחדש: מפיקים-חיים + poller-מילויים לא יספרו מילוי-כפול אחרי-restart
       if (Array.isArray(s.seenRefs)) for (const [k, v] of s.seenRefs as [string, number][]) seenRefs.set(k, v);
       if (!balances.has("treasury")) throw new Error("snapshot corrupt");
@@ -460,7 +488,7 @@ function boot() {
         }
         quarantineState(`boot-heal-brokenAt-${v.brokenAt}`);
         balances = new Map();
-        pool = { saos: POOL_SAOS, usds: POOL_USDS, feesUsds: 0, feesSaos: 0 };
+        pool = { saos: fromF(POOL_SAOS), usds: fromF(POOL_USDS), feesUsds: 0n, feesSaos: 0n }; // גל-87
         seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; recent = [];
         byKind = {}; byAccount = {}; rejected = 0; ledgerFileNo = 0;
         seed();
@@ -530,13 +558,17 @@ function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; ancho
 }
 
 /* ── HTTP ─────────────────────────────────────────────────────────────────── */
-function priceUsdsPerSaos() { return pool.saos > 0 ? pool.usds / pool.saos : 0; }
+function priceUsdsPerSaos() { const s = toF(pool.saos); return s > 0 ? toF(pool.usds) / s : 0; } // תצוגה/החלטה-בלבד (גל-87)
 function countsWindow(ms: number) { const cutoff = Date.now() - ms; let c = 0; for (let i = recent.length - 1; i >= 0; i--) { if (recent[i] >= cutoff) c++; else break; } return c; }
 
 function snapshotSave() {
   if (sealing) return; // חוק-גל-82: אף-כתיבת-מדינה-בזמן-אטימה
   flush();
-  const obj = { v: 3, savedAt: Date.now(), seq, lastH, balances: Object.fromEntries(balances), pool, byKind, byAccount, rejected, errors, ledgerFileNo, ingestOk, ingestDedup, ingestFailed, ingestBad, seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
+  // גל-87 · סידור-זהה-בייטים ל-snapshot ההיסטורי: µ¢ → מספרי-6-ספרות דרך-toF
+  const obj = { v: 3, savedAt: Date.now(), seq, lastH,
+    balances: Object.fromEntries([...balances].map(([k, v]) => [k, { usds: toF(v.usds), saos: toF(v.saos), saosStaked: toF(v.saosStaked) }])),
+    pool: { saos: toF(pool.saos), usds: toF(pool.usds), feesUsds: toF(pool.feesUsds), feesSaos: toF(pool.feesSaos) },
+    byKind, byAccount, rejected, errors, ledgerFileNo, ingestOk, ingestDedup, ingestFailed, ingestBad, attemptsTotal, seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
   const tmp = SNAP + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(obj));
   fs.renameSync(tmp, SNAP);
@@ -563,13 +595,14 @@ const server = Bun.serve({
           realEvents: { ingestOk, ingestDedup, ingestFailed, ingestBadPayload: ingestBad, droppedTx: ingestFailed },
           byKind, rejected, errors, seq, lastH,
           throughput: { attempts: attemptsTotal, rejectedCount: rejected, acceptancePct: attemptsTotal > 0 ? +(((attemptsTotal - rejected) / attemptsTotal) * 100).toFixed(1) : null, governor: { nBase, cap: N_CAP, min: N_MIN, windowAcceptance: lastGovAcc } },
-          supply: { saosTotal: SAOS_SUPPLY, saosStaked: [...balances.values()].reduce((a, b) => a + b.saosStaked, 0), usdsInPool: pool.usds, saosInPool: pool.saos },
-          pool: { priceUsdsPerSaos: +priceUsdsPerSaos().toFixed(6), feesUsds: +pool.feesUsds.toFixed(4), feesSaos: +pool.feesSaos.toFixed(4), k: +(pool.saos * pool.usds).toFixed(2) },
+          supply: { saosTotal: SAOS_SUPPLY, saosStaked: toF([...balances.values()].reduce((a, b) => a + b.saosStaked, 0n)), usdsInPool: toF(pool.usds), saosInPool: toF(pool.saos) },
+          pool: { priceUsdsPerSaos: +priceUsdsPerSaos().toFixed(6), feesUsds: +toF(pool.feesUsds).toFixed(4), feesSaos: +toF(pool.feesSaos).toFixed(4), k: +(toF(pool.saos) * toF(pool.usds)).toFixed(2) },
           topAccounts: top, lastVerify, lastSeal,
           sealLogTail: sealJournal.slice(-6),
         });
       }
-      if (url.pathname === "/balances") return Response.json({ balances: Object.fromEntries([...balances].map(([k, v]) => [k, { ...v, usds: +v.usds.toFixed(4), saos: +v.saos.toFixed(4) }])) });
+      // גל-87 · כל-היציאות מומרות-מ-µ¢ — BigInt לא-מתסדר ל-JSON
+      if (url.pathname === "/balances") return Response.json({ balances: Object.fromEntries([...balances].map(([k, v]) => [k, { usds: +toF(v.usds).toFixed(4), saos: +toF(v.saos).toFixed(4), saosStaked: +toF(v.saosStaked).toFixed(4) }])) });
       if (url.pathname === "/ledger") {
         const lim = Math.min(500, Math.max(1, +(url.searchParams.get("limit") ?? 100)));
         return Response.json({ tail: tailRing.slice(-lim).reverse() });
