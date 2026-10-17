@@ -18,13 +18,31 @@
  *    vault-seal, שום דבר לא מת עם ה-sandbox.
  *  · בריכת-AMM קבועת-מכפלה אמיתית: המחיר נע מהזרימה, עמלת 0.3% נשארת
  *    בבריכה (העמקת-נזילות), אספקת SAOS קבועה 21,000 (חוק-21M המתוקן).
+ * ==============================================================================
+ *
+ * ── גל-86 · תיקון-שימור (branch ops/a1-economy-ledger-conservation) ─────────
+ *  1. באג-הבריכה-הכפולה: pool (משתנה-עצמאי) מול bal("pool") (רשומה-במפה) היו
+ *     שני-אובייקטים — פלט-סוואפ זוכה לרשומת-המפה (רוח-רפאים) במקום לסוחר:
+ *     הסוחר שילם קלט וקיבל אפס. הבריכה היא-מעתה אובייקט-יחיד בתוך המפה,
+ *     ופלט-סוואפ משולם לסוחר (from). שימור-מלא בכל-סחר.
+ *  2. אינווריאנט-שימור רץ: ΣSAOS=21,000 · ΣUSDS=60,000 נבדק אחרי-כל-עסקה;
+ *     הפרה → HALT fail-closed (מסורת InvariantViolation של הדקס) — אף-עסקה
+ *     לא נכתבת על-ספר-שנפרם.
+ *  3. גנסיס-כן: כל-ההצע נולד בכספת ומוקצה דרך-עסקאות-גנסיס חתומות-בשרשרת
+ *     (מבוקר, אפס-הנפקה-סמויה).
+ *  4. דוראביליות: כל-עסקה נשטפת-לדיסק מיד — ביטול-חלון-הקריסה (64-רשומות
+ *     מאוגרות) שקרע את-השרשרת ב-seq 46,335.
+ *  5. ניידות: /home/z/my-project הקשיח → SAOS_ROOT/DEX_DB/FE_STATE_DIR (env).
+ *  6. selftest.ts: ראיות-מכונה (bun run selftest) — רץ ללא-שרת (FE_NO_SERVE=1).
  * ============================================================================== */
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
 
 const PORT = 3016;
-const STATE_DIR = path.join(import.meta.dir, "state");
+const STATE_DIR = process.env.FE_STATE_DIR ? path.resolve(process.env.FE_STATE_DIR) : path.join(import.meta.dir, "state");
+/* גל-86 · ניידות: שורש-המערכת נגזר מהסביבה — המנוע רץ בכל-מכונה, לא רק בסנדבוקס-אחד */
+const SAOS_ROOT = process.env.SAOS_ROOT ? path.resolve(process.env.SAOS_ROOT) : import.meta.dir;
 const LEDGER = path.join(STATE_DIR, "ledger.jsonl");
 const SNAP = path.join(STATE_DIR, "snapshot.json");
 const TICK_MS = 800; // גל-85: 900→800 (תקורה-זעירה — flush הוא append-בלבד)
@@ -94,6 +112,7 @@ let attemptsTotal = 0;
 let winAttempts = 0, winRejected = 0, lastGovAcc: number | null = null;
 function rej() { rejected++; winRejected++; }
 let errors = 0;
+let invariantHalt: string | null = null; // גל-86 · fail-closed: לא-כותבים על-ספר-שנפרם
 let bootedAt = Date.now();
 let lastVerify: { at: number; ok: boolean; checked: number } | null = null;
 let sealing = false; // חוק-גל-82: מנוע-קפוא-בזמן-אטימת-כספת (אף-כתיבת-מדינה)
@@ -158,6 +177,20 @@ function bal(id: string) {
   return b;
 }
 
+/* גל-86 · סכום-שימור: Σ(saos+staked) ו-Σ(usds) על-כל-החשבונות (הבריכה בתוך-המפה)
+ * חייבים להיות קבועים לנצח: 21,000 SAOS · 60,000 USDS. אפס-הנפקה, אפס-שריפה. */
+function sumBalances(): { s: number; u: number } {
+  let s = 0, u = 0;
+  for (const b of balances.values()) { s += (b.saos || 0) + (b.saosStaked || 0); u += (b.usds || 0); }
+  return { s, u };
+}
+function checkConservation(): string | null {
+  const { s, u } = sumBalances();
+  if (Math.abs(s - SAOS_SUPPLY) > 0.005) return `ΣSAOS=${s.toFixed(4)} ≠ ${SAOS_SUPPLY} (שימור-הצע נפרם)`;
+  if (Math.abs(u - TREASURY_USDS) > 0.005) return `ΣUSDS=${u.toFixed(4)} ≠ ${TREASURY_USDS} (שימור-הצע נפרם)`;
+  return null;
+}
+
 /* ── חתימת-שרשרת ──────────────────────────────────────────────────────────── */
 function sealTx(t: Omit<Tx, "h">): Tx {
   const body = JSON.stringify({ ...t, prev: lastH });
@@ -165,19 +198,19 @@ function sealTx(t: Omit<Tx, "h">): Tx {
   return { ...t, h };
 }
 
+/* גל-86 · דוראביליות-פר-טרנזקציה: כל-רשומה נשטפת-לדיסק מיד. המאגר-בן-64-הרשומות
+ * היה-חלון-הקריסה שקרע את-השרשרת (seq 46,335: 8-רשומות-מאוגרות-שאבדו-והשרשרת
+ * המשיכה-מהזיכרון). בקצב-שלנו (~20 עסקאות/שנ׳) append מיידי הוא-תקורה-זעירה. */
 function persist(tx: Tx) {
-  ledgerBuf.push(JSON.stringify(tx));
-  if (ledgerBuf.length >= 64) flush();
+  try { fs.appendFileSync(LEDGER, JSON.stringify(tx) + "\n"); ledgerLines++; }
+  catch { /* כנה — שגיאת-דיסק לא מפילה את המנוע; הרשומה אבודה-בכנות */ }
+  if (ledgerLines > 200_000) rotate();
   tailRing.push(tx);
   if (tailRing.length > 500) tailRing.shift();
 }
 
 function flush() {
-  if (!ledgerBuf.length) return;
-  fs.appendFileSync(LEDGER, ledgerBuf.join("\n") + "\n");
-  ledgerLines += ledgerBuf.length;
-  ledgerBuf = [];
-  if (ledgerLines > 200_000) rotate();
+  /* גל-86 · no-op בטוח: persist כותב מיד; נשמר לנקודות-עקביות (seal/snapshot) */
 }
 
 function rotate() {
@@ -199,16 +232,28 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   } else {
     (from as any)[field] -= t.amount;
     if (t.kind === "swap") {
-      // מטבע-נכנס יושב בבריכה, עמלה נשארת בה
+      // גל-86 · תיקון-הבאג: מטבע-נכנס יושב בבריכה (עמלה נשארת בה), והפלט משולם
+      // לסוחר (from) — לא ל-bal("pool") שהיה אובייקט-רוח-נפרד. שימור-מלא:
+      // USDS: from-amount / pool+amount · SAOS: pool-out / from+out.
       const feeAmt = t.fee ?? 0;
-      if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= (t as any).outSaos; to.saos += (t as any).outSaos; pool.feesUsds += feeAmt; }
-      else { pool.saos += t.amount; pool.usds -= (t as any).outUsds; to.usds += (t as any).outUsds; pool.feesSaos += feeAmt; }
+      if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= (t as any).outSaos; from.saos += (t as any).outSaos; pool.feesUsds += feeAmt; }
+      else { pool.saos += t.amount; pool.usds -= (t as any).outUsds; from.usds += (t as any).outUsds; pool.feesSaos += feeAmt; }
     } else {
       (to as any)[field] += t.amount;
     }
   }
   byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
   byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
+  // גל-86 · שער-אינווריאנט fail-closed: אם-השימור-נפרם — העסקה לא נכתבת,
+  // המנוע נעצר (HALT) והדיווח יוצא כן. אף-קומיט-שקר על-ספר-שבור.
+  const inv = checkConservation();
+  if (inv) {
+    invariantHalt = `seq=${t.seq} · ${inv}`;
+    errors++;
+    rej();
+    console.error(`[fleet-economy] INVARIANT-HALT: ${invariantHalt} — המנוע-קפוא (fail-closed)`);
+    return null;
+  }
   const signed = sealTx(t);
   if (refH !== undefined && signed.h !== refH) { /* replay mismatch — honest */ }
   seq = signed.seq; lastH = signed.h;
@@ -301,6 +346,7 @@ function spawnTx(): Tx | null {
 }
 
 function tick() {
+  if (invariantHalt) return; // גל-86 · fail-closed: מנוע-קפוא — אף-עסקה חדשה
   if (sealing) return; // חוק-גל-82: בזמן-אטימת-כספת המנוע-קפוא — אף-כתיבה-לא-מתרחשת
   try {
     tickNo++;
@@ -339,13 +385,23 @@ function tick() {
 }
 
 /* ── אתחול מהדיסק (snapshot + אימות-שרשרת על-הזנב) ────────────────────────── */
+/* גל-86 · גנסיס-כן: הבריכה היא אובייקט-יחיד (המפה מחזיקה אותו בעצמה — אפס-כפילות),
+ * כל-ההצע נולד בכספת ומוקצה דרך-עסקאות-גנסיס חתומות-בשרשרת — מבוקר וניתן-לאימות. */
 function seed() {
+  balances.set("pool", pool as unknown as { usds: number; saos: number; saosStaked: number }); // אובייקט-יחיד
+  pool.saos = 0; pool.usds = 0; pool.feesUsds = 0; pool.feesSaos = 0; // הבריכה נולדת-אפס — ההקצאה דרך-הספר (אפס-הנפקה-כפולה)
   bal("treasury").usds = TREASURY_USDS;
-  bal("treasury").saos = SAOS_SUPPLY - POOL_SAOS;
-  bal("pool").usds = pool.usds; bal("pool").saos = pool.saos;
-  for (const s of SOLDIERS) { bal(s.id).usds = 900 + Math.random() * 600; bal(s.id).saos = 20 + Math.random() * 30; }
-  for (const n2 of FLEET_NODES) { bal(n2.id).usds = 300 + Math.random() * 200; }
-  // היצע-כולל נשמר: סכום-היתרות + הבריכה = ההצעה הקבועה
+  bal("treasury").saos = SAOS_SUPPLY; // כל-ההצע מתחיל בכספת
+  const now = Date.now();
+  const alloc = (to: string, asset: "USDS" | "SAOS", amount: number, reason: string) =>
+    apply({ seq: seq + 1, ts: now, kind: "genesis-alloc", from: "treasury", to, asset, amount: round6(amount), reason });
+  alloc("pool", "SAOS", POOL_SAOS, "הקצאת-גנסיס: נזילות-בריכה SAOS/USDS");
+  alloc("pool", "USDS", POOL_USDS, "הקצאת-גנסיס: צד-USDS בבריכה");
+  for (const s of SOLDIERS) {
+    alloc(s.id, "USDS", 900 + Math.random() * 600, `הקצאת-גנסיס: ארנק-פתיחה (${s.id})`);
+    alloc(s.id, "SAOS", 20 + Math.random() * 30, `הקצאת-גנסיס: מעורבות-SAOS (${s.id})`);
+  }
+  for (const n2 of FLEET_NODES) alloc(n2.id, "USDS", 300 + Math.random() * 200, `הקצאת-גנסיס: צף-תפעול (${n2.id})`);
 }
 
 /* גל-84 · שחזור-זנב-דטרמיניסטי-מהסנאפשוט: כל-עסקה-בספר-עם seq>snapshot.seq נבחנת-שרשור-מול-המצב
@@ -373,8 +429,9 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
           (from as any)[field] -= t.amount;
           if (t.kind === "swap") {
             const feeAmt = t.fee ?? 0;
-            if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= t.outSaos; to.saos += t.outSaos; pool.feesUsds += feeAmt; }
-            else { pool.saos += t.amount; pool.usds -= t.outUsds; to.usds += t.outUsds; pool.feesSaos += feeAmt; }
+            // גל-86 · תיקון-הישנות-הבאג בשחזור-זנב: הפלט לסוחר, לא לרוח-הבריכה
+            if (t.asset === "USDS") { pool.usds += t.amount; pool.saos -= t.outSaos; from.saos += t.outSaos; pool.feesUsds += feeAmt; }
+            else { pool.saos += t.amount; pool.usds -= t.outUsds; from.usds += t.outUsds; pool.feesSaos += feeAmt; }
           } else { (to as any)[field] += t.amount; }
         }
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
@@ -408,12 +465,26 @@ function boot() {
       const s = JSON.parse(fs.readFileSync(SNAP, "utf8"));
       balances = new Map(Object.entries(s.balances ?? {}).map(([k, v]) => [k, v as any]));
       pool = s.pool ?? pool; seq = s.seq ?? 0; lastH = s.lastH ?? lastH;
+      balances.set("pool", pool as unknown as { usds: number; saos: number; saosStaked: number }); // גל-86 · אובייקט-בריכה-יחיד — אפס-רוח-רפאים
       byKind = s.byKind ?? {}; byAccount = s.byAccount ?? {}; rejected = s.rejected ?? 0; errors = s.errors ?? 0;
       ledgerFileNo = s.ledgerFileNo ?? 0;
       ingestOk = s.ingestOk ?? 0; ingestDedup = s.ingestDedup ?? 0; ingestFailed = s.ingestFailed ?? 0; ingestBad = s.ingestBad ?? 0;
       // dedup שורד-הפעלה-מחדש: מפיקים-חיים + poller-מילויים לא יספרו מילוי-כפול אחרי-restart
       if (Array.isArray(s.seenRefs)) for (const [k, v] of s.seenRefs as [string, number][]) seenRefs.set(k, v);
       if (!balances.has("treasury")) throw new Error("snapshot corrupt");
+      // גל-86 · אימות-שימור-הצע על-הסנאפשוט: ספר שמסכם ליותר מההצע-הקבוע (עולם
+      // ה-28,211 ההיסטורי — כפילות-בריכה) אינו ספר-אמת → הסגר-כן + גנסיס-נקי.
+      const invSnap = checkConservation();
+      if (invSnap) {
+        console.error(`[fleet-economy] boot-invariant-violation: ${invSnap} — הסגר + גנסיס-נקי`);
+        quarantineState(`boot-invariant-violation`);
+        balances = new Map();
+        pool = { saos: POOL_SAOS, usds: POOL_USDS, feesUsds: 0, feesSaos: 0 };
+        seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; recent = [];
+        byKind = {}; byAccount = {}; rejected = 0; ledgerFileNo = 0;
+        seed();
+        return { restored: false, seq: 0, quarantined: true };
+      }
       // ריפוי-עצמי בעלייה (גל-82 · שורש-התפר): אם-הספר-על-הדיסק-תפור (תפר-מיזוג-גיט
       // בין-שרשרת-מקומית-לענן) — אין-המשך-על-ספר-שבור: הסגר-כנה + זריעה-חדשה.
       const v = verifyChain();
@@ -489,12 +560,13 @@ function snapshotSave() {
   fs.renameSync(tmp, SNAP);
 }
 
-const server = Bun.serve({
+/* גל-86 · FE_NO_SERVE=1 → אין-שרת ואין-טיימרים (מצב-selftest נקי) */
+const server = process.env.FE_NO_SERVE === "1" ? null : Bun.serve({
   port: PORT,
   async fetch(req, srv) {
     const url = new URL(req.url);
     try {
-      if (url.pathname === "/health") return Response.json({ ok: true, engine: "fleet-economy", seq, uptimeMs: Date.now() - bootedAt, lastH, port: PORT });
+      if (url.pathname === "/health") return Response.json({ ok: !invariantHalt, engine: "fleet-economy", seq, uptimeMs: Date.now() - bootedAt, lastH, port: PORT, invariant: invariantHalt ? { ok: false, halt: invariantHalt } : { ok: true } });
       if (url.pathname === "/metrics") {
         const total = Object.values(byKind).reduce((a, b) => a + b, 0);
         const top = Object.entries(byAccount).sort((a, b) => b[1] - a[1]).slice(0, 10)
@@ -510,7 +582,7 @@ const server = Bun.serve({
           realEvents: { ingestOk, ingestDedup, ingestFailed, ingestBadPayload: ingestBad, droppedTx: ingestFailed },
           byKind, rejected, errors, seq, lastH,
           throughput: { attempts: attemptsTotal, rejectedCount: rejected, acceptancePct: attemptsTotal > 0 ? +(((attemptsTotal - rejected) / attemptsTotal) * 100).toFixed(1) : null, governor: { nBase, cap: N_CAP, min: N_MIN, windowAcceptance: lastGovAcc } },
-          supply: { saosTotal: SAOS_SUPPLY, saosStaked: [...balances.values()].reduce((a, b) => a + b.saosStaked, 0), usdsInPool: pool.usds, saosInPool: pool.saos },
+          supply: { saosTotal: SAOS_SUPPLY, saosStaked: [...balances.values()].reduce((a, b) => a + (b.saosStaked ?? 0), 0), usdsInPool: pool.usds, saosInPool: pool.saos, conservation: (() => { const { s, u } = sumBalances(); return { saosSum: +s.toFixed(4), usdsSum: +u.toFixed(4), ok: !invariantHalt, halt: invariantHalt }; })() },
           pool: { priceUsdsPerSaos: +priceUsdsPerSaos().toFixed(6), feesUsds: +pool.feesUsds.toFixed(4), feesSaos: +pool.feesSaos.toFixed(4), k: +(pool.saos * pool.usds).toFixed(2) },
           topAccounts: top, lastVerify, lastSeal,
           sealLogTail: sealJournal.slice(-6),
@@ -691,7 +763,7 @@ function nextServerPids(): number[] {
         // גל-84 · היקף-מדויק: רק-next-server-של-my-project — לא-של-FleetHQ/אחרים
         try {
           const cwd = fs.readlinkSync(`/proc/${pid}/cwd`);
-          if (!cwd.startsWith("/home/z/my-project")) continue;
+          if (!cwd.startsWith(SAOS_ROOT)) continue;
         } catch { /* ללא-cwd → לא-שלנו */ continue; }
         out.push(Number(pid));
       } catch { /* תהליך-נעלם */ }
@@ -702,7 +774,7 @@ function nextServerPids(): number[] {
 
 /* גל-84 · מרקר-הקפאה-מתוכננת: המפקח-על-3000 קורא-אותו-ונמנע-מהצתת-הצתות-החייאה
  * (EADDRINUSE-סערה) בזמן-שהשרת-מושהה-כחלק-מאטימה-עקבית. נמחק-ב-finally תמיד. */
-const WEB_FREEZE_FLAG = "/home/z/my-project/state/web-freeze.flag";
+const WEB_FREEZE_FLAG = path.join(SAOS_ROOT, "state", "web-freeze.flag");
 function webFreezeSet() {
   try { fs.mkdirSync(path.dirname(WEB_FREEZE_FLAG), { recursive: true }); fs.writeFileSync(WEB_FREEZE_FLAG, String(Date.now())); } catch { /* כנה */ }
 }
@@ -722,7 +794,7 @@ async function sealMyProject(): Promise<void> {
     preLedger = path.join(STATE_DIR, `tmp-prepull-ledger-${ts}.jsonl`);
     preSnap = path.join(STATE_DIR, `tmp-prepull-snap-${ts}.json`);
     try { fs.copyFileSync(LEDGER, preLedger); fs.copyFileSync(SNAP, preSnap); } catch { preLedger = ""; preSnap = ""; }
-    await sealRepo("/home/z/my-project", () => {
+    await sealRepo(SAOS_ROOT, () => {
       const v = verifyChain();
       if (!v.ok) {
         // תפר-מיזוג-מהענן → משמורת-מדינה: השרשרת-החיה-המקומית-מנצחת
@@ -764,7 +836,7 @@ async function sealAll(): Promise<void> {
     // freeze (SIGSTOP-ל-next-server) + גיבוי-prepull + custody-restore-אחרי-הריבוז.
     // שריד-מיזוג: sealMyProject הוגדר-אך-מעולם-לא-נקרא — הלולאה-אטמה-אותו-יבש-בלי-הקפאה
     // (שורש-התפרים-החוזרים). היתר-המאגרים — בלולאה-הרגילה.
-    const rest = SEAL_REPOS.filter((d) => d !== "/home/z/my-project");
+    const rest = SEAL_REPOS.filter((d) => path.resolve(d) !== path.resolve(SAOS_ROOT));
     try { await sealMyProject(); sealed++; } catch (e) { sealLog({ repo: "my-project", action: "custody-seal-fail", error: String(e).slice(0, 160) }); }
     for (const dir of rest) { if (await sealRepo(dir)) sealed++; }
     sealing = false; // הפשרה — הכלכלה-חוזרת-לנשום
@@ -778,12 +850,16 @@ async function sealAll(): Promise<void> {
     try { fs.rmSync(lock, { force: true }); } catch { /* כנה */ }
   }
 }
-setInterval(sealAll, 10 * 60 * 1000);
-setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עלייה
+if (process.env.FE_NO_SERVE !== "1") {
+  setInterval(sealAll, 10 * 60 * 1000);
+  setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עלייה
+}
 
 const bootResult = boot();
-setInterval(tick, TICK_MS);
-setInterval(snapshotSave, SNAP_MS);
+if (process.env.FE_NO_SERVE !== "1") {
+  setInterval(tick, TICK_MS);
+  setInterval(snapshotSave, SNAP_MS);
+}
 process.on("exit", () => { try { flush(); snapshotSave(); } catch {} });
 
 /* ── רשת-ביטחון למילויי-דקס (poller): כל-עסקה שנרשמה בפועל במנוע-הדקס (DexTrade —
@@ -792,7 +868,7 @@ process.on("exit", () => { try { flush(); snapshotSave(); } catch {} });
  *   דיווח את אותו מילוי, האירוע נספר פעם-אחת בדיוק. קריאה רק-לקריאה (readonly)
  *   על db/custom.db. אפס-סינתזה: רק עסקאות שנוצרו לאחר-עליית-המנוע. */
 import { Database } from "bun:sqlite";
-const DEX_DB = "/home/z/my-project/db/custom.db";
+const DEX_DB = process.env.DEX_DB ? path.resolve(process.env.DEX_DB) : path.join(SAOS_ROOT, "db", "custom.db");
 const FILL_POLL_MS = 45_000;
 const fillBaseline = Date.now(); // רק-מילויים-חדשים מאז-עלייה (היסטוריה לא נספרת)
 let fillPollErrors = 0, fillPollRuns = 0;
@@ -817,8 +893,13 @@ function pollDexFills(): void {
   } catch { fillPollErrors++; } // db-נעול/זמני — הסבב-הבא ינסה שוב (כנה)
   finally { try { db?.close(); } catch { /* כנה */ } }
 }
-setInterval(pollDexFills, FILL_POLL_MS);
-setTimeout(pollDexFills, 15_000);
+if (process.env.FE_NO_SERVE !== "1") {
+  setInterval(pollDexFills, FILL_POLL_MS);
+  setTimeout(pollDexFills, 15_000);
+}
 
-console.log(`[fleet-economy] חי על :${PORT} · restored=${bootResult.restored} · seq=${bootResult.seq} · תורת-משתמשי-פנים בעיצומה · vault-seal מובנה · ingest-אירועים-אמת מחובר (dex-fills+verifier+seal)`);
-export {};
+if (process.env.FE_NO_SERVE !== "1") console.log(`[fleet-economy] חי על :${PORT} · restored=${bootResult.restored} · seq=${bootResult.seq} · תורת-משתמשי-פנים בעיצומה · vault-seal מובנה · ingest-אירועים-אמת מחובר (dex-fills+verifier+seal)`);
+/* גל-86 · ייצוא-מבוקר ל-selftest (ראיות-מכונה ללא-שרת) */
+export { apply, ammSwap, bal, verifyChain, seed, sumBalances, checkConservation };
+export const seqNow = () => seq;
+export const haltState = () => invariantHalt;
