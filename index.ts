@@ -481,7 +481,7 @@ function quarantineState(reason: string) {
  * אפס-שכתוב-היסטוריה: השורות נשארות בדיוק כפי שנכתבו. /verify חושף anchors —
  * צמיחה-מעבר ל-3 = אזעקה. המקור-לתפרים נחסם בכותב-יחיד (economy-beat + heartbeat). */
 function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; anchors?: { seq: number; line: number }[] } {
-  let prev = "GENESIS"; let checked = 0; let prevWasAnchor = false;
+  let prev = "GENESIS"; let checked = 0; let prevWasAnchor = false; let lastSeq = 0;
   const anchors: { seq: number; line: number }[] = [];
   const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
   for (const f of files) {
@@ -490,6 +490,9 @@ function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; ancho
       const line = lines[li];
       try {
         const t = JSON.parse(line) as Tx;
+        // Z2-15 · חוק-סדר: נסיגת/כפילות-seq = שבר-מבנה fail-closed (מיזוג-גיט יכול לסדר מחדש — לא ניתן-להוכחה ≠ תקין)
+        if (typeof t.seq !== "number" || t.seq <= lastSeq) return { ok: false, checked, brokenAt: t.seq, anchors };
+        lastSeq = t.seq;
         const { h, ...rest } = t;
         const body = JSON.stringify({ ...rest, prev });
         if (createHash("sha256").update(body).digest("hex").slice(0, 32) !== h) {
@@ -502,6 +505,9 @@ function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; ancho
       } catch { return { ok: false, checked, brokenAt: checked, anchors }; }
     }
   }
+  // Z2-15 · זנב-בלתי-מעוגן: הספר-נגמר-על-עוגן בלי-יורש-שמוכיח-עיגון-מחדש → שבר-אמת fail-closed
+  // (קריסה-בין-flush-לסנאפשוט = בדיוק-מה-replayTailFromSnapshot נבנה-לטפל-בו)
+  if (prevWasAnchor && anchors.length > 0) return { ok: false, checked, brokenAt: anchors[anchors.length - 1].seq, anchors };
   return { ok: true, checked, anchors };
 }
 
