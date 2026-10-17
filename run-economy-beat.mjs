@@ -15,13 +15,13 @@ import path from "path";
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
 const STATE = path.join(ROOT, "state");
 const HB = path.join(STATE, "writer-heartbeat.json");
-const WRITER = "github-economy-beat";
+const WRITER = process.env.ECONOMY_WRITER ?? "github-economy-beat";
 const BEAT_SECONDS = Number(process.env.BEAT_SECONDS ?? 180);
 const PORT = 3016;
 const ANCHOR_BASELINE = 3; // פורנזיה 2026-10-17: תפרי-מיזוג היסטוריים seq 46335/55120/68276
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function getJson(p: string): Promise<any> {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function getJson(p) {
   try { const r = await fetch(`http://127.0.0.1:${PORT}${p}`); return await r.json(); } catch { return null; }
 }
 
@@ -39,14 +39,14 @@ fs.writeFileSync(HB, JSON.stringify({ writer: WRITER, at: Date.now() }) + "\n");
 
 /* 2) boot על-הספר-הקנוני */
 const child = spawn("bun", ["index.ts"], { cwd: ROOT, stdio: "inherit" });
-let up: any = null;
+let up = null;
 for (let i = 0; i < 30; i++) { await sleep(2000); up = await getJson("/health"); if (up?.ok) break; }
 if (!up?.ok) {
   console.error("[economy-beat] FAIL — המנוע לא עלה על הספר-הקנוני");
   try { child.kill("SIGTERM"); } catch {}
   process.exit(1);
 }
-const seqStart: number = up.seq;
+const seqStart = up.seq;
 console.log(`[economy-beat] UP · seq=${seqStart} · הכלכלה נושמת ${BEAT_SECONDS}ש'`);
 
 /* 3) זרימה */
@@ -65,7 +65,7 @@ if (anchors > ANCHOR_BASELINE) { console.error("[economy-beat] FAIL — נוצר
 
 /* 5) סיכום-כן */
 const summary = process.env.GITHUB_STEP_SUMMARY;
-const line = (s: string) => { if (summary) try { fs.appendFileSync(summary, s + "\n"); } catch {} console.log(s); };
+const line = (s) => { if (summary) try { fs.appendFileSync(summary, s + "\n"); } catch {} console.log(s); };
 const delta = (m?.seq ?? 0) - seqStart;
 line(`## economy-beat ✅`);
 line(`- seq: ${seqStart} → ${m?.seq ?? "?"} (**+${delta} עסקאות אמת ב-beat זה**)`);
@@ -76,7 +76,7 @@ line(`- כותב-יחיד: ${WRITER} · ${new Date().toISOString()}`);
 fs.writeFileSync(HB, JSON.stringify({ writer: WRITER, at: Date.now(), endedAt: Date.now(), seq: m?.seq }) + "\n");
 
 /* 6) איטום-לגיט */
-const run = (cmd: string, args: string[]) => new Promise<{ code: number; o: string }>((res) => {
+const run = (cmd, args) => new Promise((res) => {
   const c = spawn(cmd, args, { cwd: ROOT });
   let o = ""; c.stdout.on("data", (d) => (o += d)); c.stderr.on("data", (d) => (o += d));
   c.on("close", (code) => res({ code: code ?? 1, o }));
