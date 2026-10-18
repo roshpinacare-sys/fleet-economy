@@ -24,7 +24,7 @@ const STATE_DIR = "/home/z/audit/sovereign-builder/state";
 const STATE_FILE = `${STATE_DIR}/builder-state.json`;
 const GROWTH_LOG = `${STATE_DIR}/growth-log.jsonl`;
 const VM_VENV_PY = "/home/z/audit/sovereign-vm/venv/bin/python";
-const BRAIN_URL = "http://127.0.0.1:3000/api/saos/builder-brain";
+const BRAIN_URL = "http://127.0.0.1:3000/api/giant/builder-brain"; // גל-95: נתיב-קנוני-אחרי-קציר-3 (ה-saos-הישן-נעלם-בשחזור)
 const LEDGER = `${ESTATE}/state/ledger.jsonl`;
 const BEAT_STATUS = "/home/z/audit/economy-beat-service-status.json";
 
