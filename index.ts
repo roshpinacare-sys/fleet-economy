@@ -672,7 +672,11 @@ const server = Bun.serve({
 import { execFile } from "child_process";
 const SEAL_REPOS = [
   "/home/z/my-project",
-  "/home/z/estate/fleet-economy", // גל-84 · ביתו-העצמאי-של-המנוע — הספר-החי-נאטם-לכספת-משלו
+  // גל-18 · תיקון-שורש-מדוד: הנתיב /home/z/estate/fleet-economy לא-קיים-על-המכונה
+  // → ספר-הקנון (work/fleet-economy/state, seq=134,268→284,475) מעולם-לא-נאטם —
+  // 150,120 אירועים חיו-רק-על-הדיסק (הפרת-חוק-הבעלים "כלום-לא-מת-עם-הסנדבוקס").
+  // משמורת-חירום-ידנית בוצעה-ונדחפה (81971ff) · מעכשיו-האטימה-האוטומטית-פוגעת-בבית-האמיתי.
+  "/home/z/work/fleet-economy", // גל-18 · ביתו-האמיתי-של-המנוע — הספר-החי-נאטם-לכספת-משלו
   "/home/z/estate/FleetHQ",
   "/home/z/estate/Domain",
   "/home/z/estate/Console",
@@ -687,6 +691,7 @@ const SEAL_REPOS = [
   "/home/z/autonomy-fix",
 ];
 const SEAL_LOG = path.join(STATE_DIR, "seal-log.jsonl");
+let sealCycle = 0; // גל-18 · מונה-סבבים לדלתא-אטימה (DB כל-10-סבבים) והיגיינת-gc
 const sealJournal: Record<string, unknown>[] = [];
 let lastSeal: { at: string; action: string } | null = null;
 function sealLog(e: Record<string, unknown>) {
@@ -703,7 +708,7 @@ function git(dir: string, args: string[]): Promise<{ ok: boolean; out: string }>
     });
   });
 }
-async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opts?: { strategyOurs?: boolean }): Promise<boolean> {
+async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opts?: { strategyOurs?: boolean; excludePaths?: string[]; gc?: boolean }): Promise<boolean> {
   // גל-83 · תיקון-תפר-מיזוג: הפרמטר afterPull נמחק-מהחתימה-במיזוג-אך-הקריאה-ב-sealMyProject
   // המשיכה-להעביר-אותו + הגוף-התייחס-אליו → ReferenceError שהרג-את-כל-סבב-האטימה
   // (ובכך-ביטל-בשקט-את-משמורת-המדינה: freeze+custody-restore — שורש-קריעות-הספר-החוזרות).
@@ -715,6 +720,13 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     const dirtyLines = st.out.split("\n").filter((l) => l && !l.startsWith("##"));
     if (dirtyLines.length > 0) {
       await git(dir, ["add", "-A"]);
+      // גל-18 · דלתא-אטימה: קבצים-כבדים-מתחלפים (db/custom.db בינארי 40MB) לא-נאטמים-בכל-סבב
+      // אלא-בקצב-דילוג (SEAL_DB_EVERY) — ה-blob-הרפוי-המלא-בכל-10-דק' היה-הדליפה-המבנית
+      // (~300MB/שעה ל-.git, מוות-דיסק-בתוך-שעות). הספר-החי-והלדג'ר-נאטמים-תמיד.
+      if (opts?.excludePaths?.length) {
+        await git(dir, ["reset", "-q", "--", ...opts.excludePaths]);
+        sealLog({ repo: name, action: "delta-skip", paths: opts.excludePaths });
+      }
       const cm = await git(dir, ["commit", "-q", "-m", `vault-seal [auto-economy]: ${dirtyLines.length} files — אטימה-חוזרת, כלום לא מת עם הסנדבוקס`]);
       if (!cm.ok && !cm.out.includes("nothing to commit")) { sealLog({ repo: name, action: "commit-fail", out: cm.out }); }
     }
@@ -747,6 +759,14 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     const push = await git(dir, ["push", remote, "HEAD"]);
     if (push.ok || push.out.includes("Everything up-to-date") || push.out.includes("up to date")) {
       sealLog({ repo: name, action: "sealed", ahead: ahead ?? "0", detail: push.out.slice(0, 120) });
+      // גל-18 · היגיינת-אובייקטים: אובייקטים-רפויים-בין-gc הם-הצד-השני-של-הדליפה
+      // (נמדד: 671M→407M ב-gc אחד). gc-מוגבל-זיכרון אסינכרוני אחרי-הדחיפה —
+      // לא-מאריך-את-הקפאת-המנוע; כשל-gc לא-מפיל-את-האטימה (כנה-ביומן).
+      if (opts?.gc) {
+        git(dir, ["-c", "pack.windowMemory=128m", "-c", "pack.threads=1", "-c", "pack.deltaCacheSize=64m", "-c", "pack.window=8", "gc", "--prune=now"])
+          .then((r) => { if (!r.ok) sealLog({ repo: name, action: "gc-fail", out: r.out.slice(0, 120) }); })
+          .catch(() => { /* כנה */ });
+      }
       // אירוע-אמת → עסקת-תשתית: אגרת-אטימה על מאגר שנאטם בפועל (קומיט+דחיפה קרו)
       try {
         ingestEvent({ kind: "infra", from: "FleetHQ", to: "TruthRail", asset: "USDS", amount: 0.05, refillFloat: true, reason: `אגרת-אטימת-כספת (${name})`, ref: `seal-${name}-${Date.now()}` });
@@ -796,7 +816,7 @@ function webFreezeClear() {
   try { fs.rmSync(WEB_FREEZE_FLAG, { force: true }); } catch { /* כנה */ }
 }
 
-async function sealMyProject(): Promise<void> {
+async function sealMyProject(opts?: { excludePaths?: string[]; gc?: boolean }): Promise<void> {
   sealing = true; // הקפאה-עצמית: אף-tick/snapshotSave-לא-רץ
   const pids = nextServerPids();
   webFreezeSet();
@@ -817,7 +837,7 @@ async function sealMyProject(): Promise<void> {
         if (preSnap) { try { fs.copyFileSync(preSnap, SNAP); } catch { /* כנה */ } }
         sealLog({ repo: "my-project", action: "state-custody-restore", brokenAt: v.brokenAt, restored });
       }
-    }, { strategyOurs: true }); // גל-83 · אפס-תפרים: merge -s ours — לא-נוגע-בעץ-החי-כלל
+    }, { strategyOurs: true, excludePaths: opts?.excludePaths, gc: opts?.gc }); // גל-83 · אפס-תפרים: merge -s ours — לא-נוגע-בעץ-החי-כלל · גל-18 · דלתא+gc
   } finally {
     for (const p of pids) { try { process.kill(p, "SIGCONT"); } catch { /* כנה */ } }
     webFreezeClear();
@@ -841,6 +861,11 @@ async function sealAll(): Promise<void> {
   } catch { /* כנה — ממשיכים-בלי-מנעול-אם-גם-הוא-נכשל */ }
   try {
     let sealed = 0;
+    // גל-18 · מונה-סבבי-אטימה: מפעיל-את-תורת-הדלתא-אטימה (DB כל-10-סבבים ≈ 100דק')
+    // והיגיינת-gc (כל-סבב, אסינכרוני). ספירה-מ-1: הסבב-הראשון-מאטים-DB (לכידת-פתיחה).
+    sealCycle++;
+    const includeDb = sealCycle % 10 === 1;
+    const dbExclude = includeDb ? [] : ["db/custom.db"];
     // גל-84 · הקפאה-עצמית-לסבב-האטימות: המנוע-כותב-את-ספרו-שלו (state בביתו-החדש)
     // → בלי-הקפאה, git-קורא-אובייקטים-בזמן-שינוי ("unstable object source data").
     // flush+snapshotSave נקודת-עקביות, sealing-חוסם-tick/כתיבת-מדינה-עד-סוף-הסבב.
@@ -851,8 +876,11 @@ async function sealAll(): Promise<void> {
     // שריד-מיזוג: sealMyProject הוגדר-אך-מעולם-לא-נקרא — הלולאה-אטמה-אותו-יבש-בלי-הקפאה
     // (שורש-התפרים-החוזרים). היתר-המאגרים — בלולאה-הרגילה.
     const rest = SEAL_REPOS.filter((d) => d !== "/home/z/my-project");
-    try { await sealMyProject(); sealed++; } catch (e) { sealLog({ repo: "my-project", action: "custody-seal-fail", error: String(e).slice(0, 160) }); }
-    for (const dir of rest) { if (await sealRepo(dir)) sealed++; }
+    try { await sealMyProject({ excludePaths: dbExclude, gc: true }); sealed++; } catch (e) { sealLog({ repo: "my-project", action: "custody-seal-fail", error: String(e).slice(0, 160) }); }
+    for (const dir of rest) {
+      if (dir === "/home/z/work/fleet-economy") { if (await sealRepo(dir, undefined, { gc: true })) sealed++; }
+      else { if (await sealRepo(dir)) sealed++; }
+    }
     sealing = false; // הפשרה — הכלכלה-חוזרת-לנשום
     sealLog({ action: "sweep-done" });
     // אירוע-אמת → עסקת-תשתית: סבב-אטימה הושלם (N מאגרים נאטמו בפועל)
