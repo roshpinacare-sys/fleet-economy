@@ -708,7 +708,7 @@ function git(dir: string, args: string[]): Promise<{ ok: boolean; out: string }>
     });
   });
 }
-async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opts?: { strategyOurs?: boolean; excludePaths?: string[]; gc?: boolean }): Promise<boolean> {
+async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opts?: { strategyOurs?: boolean; excludePaths?: string[]; gc?: boolean; trueMerge?: boolean }): Promise<boolean> {
   // גל-83 · תיקון-תפר-מיזוג: הפרמטר afterPull נמחק-מהחתימה-במיזוג-אך-הקריאה-ב-sealMyProject
   // המשיכה-להעביר-אותו + הגוף-התייחס-אליו → ReferenceError שהרג-את-כל-סבב-האטימה
   // (ובכך-ביטל-בשקט-את-משמורת-המדינה: freeze+custody-restore — שורש-קריעות-הספר-החוזרות).
@@ -739,7 +739,16 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     // דחף-במקומה-מצב-ישן-וקידם-את-הענן — מקור-תפרי-הספר-ההיסטוריים.
     const rm = await git(dir, ["remote"]);
     const remote = rm.out.split("\n").map((s) => s.trim()).filter(Boolean)[0] ?? "origin";
-    if (opts?.strategyOurs) {
+    if (opts?.trueMerge) {
+      // גל-18 · מיזוג-אמת לפס-הבנאי: המסילות נפרדות (המנוע: state/* · הבנאי-של-הצי:
+      // bootstrap/sovereign-builder/*) → מיזוג-אמת מאחד-שני-העצים בלי-שום-בליעה.
+      // ה-rebase נכשל-תמיד כאן (דורש-worktree-נקי — הלדג'ר-חי-נכתב-תדיד), המיזוג לא.
+      await git(dir, ["fetch", remote, "main"]);
+      const mg = await git(dir, ["merge", "--no-edit", "FETCH_HEAD"]);
+      if (!mg.ok && !mg.out.includes("Already up to date") && !mg.out.includes("up to date")) {
+        sealLog({ repo: name, action: "merge-fail", out: mg.out.slice(0, 220) });
+      }
+    } else if (opts?.strategyOurs) {
       // גל-83 · מסלול-אפס-תפרים (my-project — מחזיק-המצב-החי): merge -s ours לא-נוגע
       // בעץ-העבודה-כלל — הספר-החי-והקוד-הרצים-שלנו-מנצחים-תמיד, ההיסטוריה-של-הענן
       // (כולל-קו-הסשן-השני) מקושרת-כהורה-שני. אפס-קונפליקטים, אפס-stash, אפס-תפר.
@@ -878,7 +887,7 @@ async function sealAll(): Promise<void> {
     const rest = SEAL_REPOS.filter((d) => d !== "/home/z/my-project");
     try { await sealMyProject({ excludePaths: dbExclude, gc: true }); sealed++; } catch (e) { sealLog({ repo: "my-project", action: "custody-seal-fail", error: String(e).slice(0, 160) }); }
     for (const dir of rest) {
-      if (dir === "/home/z/work/fleet-economy") { if (await sealRepo(dir, undefined, { gc: true })) sealed++; }
+      if (dir === "/home/z/work/fleet-economy") { if (await sealRepo(dir, undefined, { gc: true, trueMerge: true })) sealed++; }
       else { if (await sealRepo(dir)) sealed++; }
     }
     sealing = false; // הפשרה — הכלכלה-חוזרת-לנשום
