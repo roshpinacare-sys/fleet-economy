@@ -20,6 +20,7 @@
 | `verify_chain` | `sovereign-vm/verify_chain.py` | `state/ledger.jsonl` | `ok=True checked=N anchors=[...]` | אימות-שרשרת-פנקס בלתי-תלוי מול עוגני-בסיס |
 | `ledger_stats` | `sovereign-vm/ledger_stats.py` | `state/ledger.jsonl` | `ok=True checked=N seqFirst=A seqLast=B` + היסטוגרמה | סטטיסטיקת-ספר: ספירה, טווח, סוגים |
 | `price_report` | `sovereign-vm/price_report.py` | `state/snapshot.json` | `ok=True seq=N price=P fees=F treasuryUsds=U` | דוח-בריכה-ואוצר (מחיר=usds/saos) |
+| `tools_selftest` | `sovereign-vm/tools_selftest.py` | (רץ-עצמאית) | `ok=True tools=3 used=3 matrix[...]` | הוכחת-שימוש-חד-פעמית: מריץ את-כל-הארסנל ומדפיס מטריצה (גל-97) |
 
 ## זרימת-השימוש
 
@@ -30,8 +31,11 @@
 → seal (איטום state+sovereign-vm לגיט-הקנוני)
 ```
 
-- **פלייבוק-קבוע (גל-96)**: אם-המוח-לא-זמין — הבנאי ממשיך בסבב `PLAYBOOK`
-  (`verify_chain → ledger_stats → price_report`) כדי-שאף-פעימה-לא-תהיה-ריקה-מידיים.
+- **פלייבוק-קבוע (גל-96, מורחב-גל-97)**: אם-המוח-לא-זמין — הבנאי ממשיך בסבב `PLAYBOOK`
+  (`verify_chain → ledger_stats → price_report → tools_selftest`) כדי-שאף-פעימה-לא-תהיה-ריקה-מידיים.
+- **גל-97 · טלמטריית-שימושיות**: כל-הרצת-כלי נרשמת ב-`state/tool-usage.jsonl` (at · tool · ok · durMs · result)
+  וב-`state/builder-state.json` תחת `toolStats` (runs/ok/fail/lastOkAt פר-כלי). היומן נאטם-לקנון
+  בכל-פעימה — **שימושיות-הארסנל היא KPI נמדד בגיט, לא טענה**. ה-UI ב-`/api/giant/tool-usability` מציג-חי.
 - **רזולוציית-פייתון**: `sovereign-vm/venv` → `/home/z/.venv/bin/python3` → `/usr/bin/python3` → `/usr/local/bin/python3`.
   הכלים stdlib-טהורים — רצים-בכל-סביבה-גם-אחרי-reboot (שיעור-11:11Z: ה-venv-אפמרלי, הקנון-בגיט).
 
@@ -40,3 +44,4 @@
 1. **venv-אפמרלי = מוות-שקט של acts** — כל-תלות-ריצה-חייבת-נפילה-מדורגת-לפייתון-מערכת.
 2. **"ok=True" ≠ כישלון** — פרסר-הפלט חייב להיות חסין-רישיות (`toLowerCase`).
 3. **חוק-המירוץ מלא**: push-כושל + קנוני-זז-לכל-commit-אחר = RACE-LOST מיידי (לא push-חוזר-סרק).
+4. **שיעור-גל-97**: אף-אחד-לא-חסין-לרגליות-2 — גם-הכלי-שנכתב-להוכיח-שימוש נפל-ברגישות-רישיות בריצה-הראשונה. קנון-המלכודות-הזה-הוא-המציל; קריאת-TOOLS.md-לפני-כתיבה-חובה.

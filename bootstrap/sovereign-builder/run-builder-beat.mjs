@@ -23,6 +23,9 @@ const CLONE = "/home/z/audit/fleet-economy-builder";      // ה-clone-הפרטי
 const STATE_DIR = "/home/z/audit/sovereign-builder/state";
 const STATE_FILE = `${STATE_DIR}/builder-state.json`;
 const GROWTH_LOG = `${STATE_DIR}/growth-log.jsonl`;
+/* גל-97 · טלמטריית-שימושיות-כלים: כל-הרצת-כלי נרשמת ביומן-שימוש ייעודי + ספירות-פר-כלי
+ * ב-state — כך-ש“האוטונומיה-יודעת-להשתמש-בכלים” הופך מטענה ל-KPI נמדד-ונאטם-לקנון. */
+const TOOL_USAGE_LOG = `${STATE_DIR}/tool-usage.jsonl`;
 /* גל-96 · פתרון-אפמרליות: סביבת-ה-VM נמחקה ב-reboot (11:11Z) → זה שורש “acts=0”:
  * הרצת-כלים הייתה תלויה ב-venv-מחוץ-לגיט. רזולוציית-פייתון-שכבתית: venv-ארסנלי קודם,
  * נפילה-מדורגת לפייתון-מערכת — כל-הכלים stdlib-טהורים ולכן רצים-בכל-סביבה. */
@@ -91,8 +94,13 @@ const TOOLS = {
     args: () => [`${ESTATE}/bootstrap/sovereign-vm/price_report.py`, `${ESTATE}/state/snapshot.json`],
     cwd: ESTATE,
   },
+  tools_selftest: {
+    title: "הוכחת-שימוש-חד-פעמית: מריץ את כל-הארסנל ומדפיס מטריצה (גל-97)",
+    args: () => [`${ESTATE}/bootstrap/sovereign-vm/tools_selftest.py`],
+    cwd: ESTATE,
+  },
 };
-const PLAYBOOK = ["verify_chain", "ledger_stats", "price_report"]; // סבב-קבוע גם-בלי-מוח
+const PLAYBOOK = ["verify_chain", "ledger_stats", "price_report", "tools_selftest"]; // סבב-קבוע גם-בלי-מוח
 
 function log(msg) {
   const line = `[builder-beat] ${new Date().toISOString()} ${msg}`;
@@ -135,6 +143,26 @@ function appendGrowth(obj) {
   fs.mkdirSync(STATE_DIR, { recursive: true });
   fs.appendFileSync(GROWTH_LOG, JSON.stringify({ at: new Date().toISOString(), ...obj }) + "\n");
 }
+/* גל-97 · רישום-שימוש-בכלי — מקור-האמת לשימושיות-הארסנל (KPI פר-כלי) */
+function recordToolUsage(toolKey, ok, durMs, result) {
+  const at = new Date().toISOString();
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.appendFileSync(TOOL_USAGE_LOG, JSON.stringify({ at, tool: toolKey, ok: !!ok, durMs, result: String(result ?? "").slice(0, 140) }) + "\n");
+  } catch {}
+  try {
+    const s = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    s.toolStats = s.toolStats ?? {};
+    const t = s.toolStats[toolKey] ?? { runs: 0, ok: 0, fail: 0, lastOkAt: null, lastResult: null };
+    t.runs += 1;
+    if (ok) { t.ok += 1; t.lastOkAt = at; } else { t.fail += 1; }
+    t.lastAt = at;
+    t.lastResult = String(result ?? "").slice(0, 120);
+    s.toolStats[toolKey] = t;
+    fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2) + "\n");
+  } catch {}
+}
+
 function readGrowthTail(n = 60) {
   try {
     const lines = fs.readFileSync(GROWTH_LOG, "utf8").trim().split("\n").filter(Boolean);
@@ -201,20 +229,26 @@ function actOnItem(item) {
     if (!tool) return { ok: false, why: `כלי-לא-רשום: ${toolKey.slice(0, 24)}` };
     const py = pyBin();
     if (!py) return { ok: false, why: "אף-פייתון-לא-זמין" };
+    const t0 = Date.now();
     try {
       const out = execFileSync(py, tool.args(), { cwd: tool.cwd, encoding: "utf8", timeout: 180_000 });
+      const dur = Date.now() - t0;
       const okLine = out.match(/ok\s*[:=]\s*(true|false)/i);
       const checked = out.match(/checked=(\d+)/);
       const seqLast = out.match(/seqLast=(\d+)/);
       const price = out.match(/price=([\d.]+)/);
       /* גל-96 · תיקון-באג-רישיות: python מדפיס “ok=True” — ההשוואה הקשה “True”===“true”
        * הפכה הצלחות-אמת לכישלונות. toLowerCase חובה. */
+      const ok = okLine ? okLine[1].toLowerCase() === "true" : false;
+      const why = (out.trim().split("\n")[0] ?? "").slice(0, 140) || "ok=?";
+      recordToolUsage(toolKey, ok, dur, why); // גל-97 · טלמטריית-שימוש
       return {
-        ok: okLine ? okLine[1].toLowerCase() === "true" : false,
-        why: (out.trim().split("\n")[0] ?? "").slice(0, 140) || "ok=?",
+        ok,
+        why,
         meta: { tool: toolKey, checked: checked?.[1], seqLast: seqLast?.[1], price: price?.[1] },
       };
     } catch (e) {
+      recordToolUsage(toolKey, false, Date.now() - t0, `הרצת-הכלי-נכשלה: ${String(e?.message ?? e).slice(0, 100)}`);
       return { ok: false, why: `הרצת-הכלי-נכשלה: ${String(e?.message ?? e).slice(0, 120)}` };
     }
   }
@@ -285,6 +319,11 @@ function seal() {
     try {
       const tail = readGrowthTail(300).join("\n") + "\n";
       fs.writeFileSync(`${CLONE}/bootstrap/sovereign-builder/state/growth-log.jsonl`, tail);
+    } catch {}
+    try {
+      /* גל-97 · איטום-יומן-השימוש לקנון — הוכחת-השימושיות חיה-בגיט, לא-רק-בזיכרון */
+      const usage = fs.readFileSync(TOOL_USAGE_LOG, "utf8").trim().split("\n").filter(Boolean).slice(-300).join("\n") + "\n";
+      fs.writeFileSync(`${CLONE}/bootstrap/sovereign-builder/state/tool-usage.jsonl`, usage);
     } catch {}
 
     git(["add", "bootstrap/sovereign-builder", "bootstrap/sovereign-vm"]);

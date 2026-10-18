@@ -18,7 +18,7 @@ export async function register() {
   const { spawn } = nodeMods.call(process, "child_process");
   const fs = nodeMods.call(process, "fs");
 
-  const HOST = "/home/z/my-project/economy-beat-host.mjs";
+  const HOST = "/home/z/audit/fleet-economy/bootstrap/economy-beat-host.mjs"; // גל-97: תיקון-נתיב — הבית-הקנוני-החי (היה-נתיב-מחוק-אחרי-העברה-ל-bootstrap)
   const HEARTBEAT = "/home/z/audit/economy-beat-host-heartbeat.json";
 
   const spawnHost = (why: string) => {
