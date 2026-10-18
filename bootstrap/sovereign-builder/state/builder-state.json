@@ -3,14 +3,6 @@
   "createdAt": "2026-10-18T11:12:18.189Z",
   "backlog": [
     {
-      "kind": "tool-run",
-      "title": "סטטיסטיקת-פנקס חיה",
-      "detail": "",
-      "tool": "ledger_stats",
-      "at": "2026-10-18T13:34:35.035Z",
-      "by": "brain"
-    },
-    {
       "kind": "note-open",
       "title": "ניטור מחיר",
       "detail": "",
@@ -24,22 +16,37 @@
       "tool": "price_report",
       "at": "2026-10-18T13:42:48.833Z",
       "by": "brain"
+    },
+    {
+      "kind": "note-open",
+      "title": "עליית מחיר",
+      "detail": "",
+      "at": "2026-10-18T14:43:00.296Z",
+      "by": "brain"
+    },
+    {
+      "kind": "tool-run",
+      "title": "הוכחת-שימוש-חד-פעמית: מטריצת-ארסנל",
+      "detail": "",
+      "tool": "tools_selftest",
+      "at": "2026-10-18T14:43:00.296Z",
+      "by": "brain"
     }
   ],
-  "growthLogCount": 21,
-  "acts": 7,
-  "metrics": 9,
-  "brainCalls": 4,
-  "brainOffers": 8,
-  "seals": 8,
+  "growthLogCount": 23,
+  "acts": 8,
+  "metrics": 10,
+  "brainCalls": 5,
+  "brainOffers": 10,
+  "seals": 9,
   "sealFailures": 0,
   "capabilities": [
     "מעקב מחיר",
     "סטטיסטיקות-מסלול",
     "בדיקת עסקאות חשודות"
   ],
-  "lastKind": "note-open",
-  "lastAt": "2026-10-18T14:12:53.326Z",
+  "lastKind": "tool-run",
+  "lastAt": "2026-10-18T14:43:00.338Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "price_report": {
@@ -49,6 +56,14 @@
       "lastOkAt": "2026-10-18T13:34:35.070Z",
       "lastResult": "ok=True seq=167 price=7.549717 fees=0.843494 treasuryUsds=1.207314",
       "lastAt": "2026-10-18T13:34:35.070Z"
+    },
+    "ledger_stats": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-18T14:43:00.337Z",
+      "lastResult": "ok=True checked=167 seqFirst=1 seqLast=167",
+      "lastAt": "2026-10-18T14:43:00.337Z"
     }
   }
 }
