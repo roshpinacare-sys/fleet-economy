@@ -18,7 +18,7 @@ const HB = path.join(STATE, "writer-heartbeat.json");
 const WRITER = process.env.ECONOMY_WRITER ?? "github-economy-beat";
 const BEAT_SECONDS = Number(process.env.BEAT_SECONDS ?? 180);
 const PORT = 3016;
-const ANCHOR_BASELINE = 3; // פורנזיה 2026-10-17: תפרי-מיזוג היסטוריים seq 46335/55120/68276
+const ANCHOR_BASELINE = 7; // פורנזיה 2026-10-18T04Z (agent-2, גל-93): בסיס-3 ההיסטורי (46335/55120/68276) + 4 תפרי-צומת מתועדים [290040, 294919, 299807, 299847] — משמורת-חירום gal-18 (777941b: ספר-חי 284K+ שניצל אחרי 150,120 אירועים לא-אטומים · 81971ff: היסטוריית-הענן מקושרת כהורה) + מיזוג-שלום-הבנאים ae96189. אומת-בלתי-תלוי (מאמת-פייתון גל-91): ok=true · checked=316,844 · רציפות-מוכחת-על-כל-התפרים. כל-תפר-מעבר ל-7 = אזעקה fail-closed.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function getJson(p) {
