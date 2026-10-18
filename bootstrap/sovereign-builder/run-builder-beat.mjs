@@ -54,9 +54,9 @@ ensureConsoleServer();
 function ensureEconomyHost() {
   try { execFileSync("pgrep", ["-f", "economy-beat-host.mjs"], { encoding: "utf8" }); return; } catch { /* אין-מארח */ }
   try {
-    const c = spawn("bun", ["/home/z/my-project/economy-beat-host.mjs"], { detached: true, stdio: "ignore" });
+    const c = spawn("bun", ["/home/z/audit/fleet-economy/bootstrap/economy-beat-host.mjs"], { detached: true, stdio: "ignore" });
     c.unref();
-    log("watchdog-גל-95: מארח-הלב-היה-מת — הוקם-מחדש (מנותק-ל-init)");
+    log("watchdog-גל-95: מארח-הלב-היה-מת — הוקם-מחדש (בית-קנוני-bootstrap, מנותק-ל-init)");
   } catch (e) { log("watchdog-לב נכשל: " + String(e?.message ?? e).slice(-200)); }
 }
 ensureEconomyHost();

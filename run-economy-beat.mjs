@@ -43,11 +43,11 @@ ensureConsoleServer();
  * של-הקונסולה-יכולה-ליפול-שקט (ואז-אף-אחד-לא-מחיה-מארחים) — לכן-כל-פעימה-חיה-מארחים-משלימים
  * בעצמה. מעגל-סגור: לב→בנאי+קונסולה · בנאי→לב+קונסולה · instrumentation→הכל (כשהוא-חי). */
 function ensureSovereignHosts() {
-  try { execFileSync("pgrep", ["-f", "sovereign-builder-host.mjs"], { encoding: "utf8" }); return; } catch { /* אין-מארח */ }
+  try { execFileSync("pgrep", ["-f", "sovereign-builder/host.mjs"], { encoding: "utf8" }); return; } catch { /* אין-מארח */ }
   try {
-    const c = spawn("bun", ["/home/z/my-project/sovereign-builder-host.mjs"], { detached: true, stdio: "ignore" });
+    const c = spawn("bun", ["/home/z/audit/fleet-economy/bootstrap/sovereign-builder/host.mjs"], { detached: true, stdio: "ignore" });
     c.unref();
-    console.log("[economy-beat] watchdog-גל-95: מארח-הבנאי-היה-מת — הוקם-מחדש (מנותק-ל-init)");
+    console.log("[economy-beat] watchdog-גל-95: מארח-הבנאי-היה-מת — הוקם-מחדש (בית-קנוני-bootstrap, מנותק-ל-init)");
   } catch (e) { console.error("[economy-beat] watchdog-בנאי נכשל: " + String(e?.message ?? e).slice(-200)); }
 }
 ensureSovereignHosts();
