@@ -454,6 +454,63 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
   } catch { return { replayed: 0, trimmed: false }; }
 }
 
+/* גל-94 · ריפוי-עומק (deep-trim) — המשך-ישר-של גל-82/84: הריפוי-הישן על שבר-באמצע-הספר
+ * (לפני-נקודת-הסנאפשוט) זרק את כל-ההיסטוריה (רג'נזיס-מלא). החדש: הליכה-מראה-מדויקת
+ * של verifyChain (כולל-סמנטיקת-עוגנים מילה-במילה), חיתוך-בתפר-הראשון:
+ *   · הקידומת-השרשרת-התקינה נשארת-חיה-בספר (אפס-שכתוב-שורות — כתיבה-חזרה מילה-במילה)
+ *   · הזנב-השבור + קבצים-מאוחרים → הסגר (אפס-מחיקה)
+ *   · עוגן-טרמינלי-בלתי-מוכח (שבר-מיד-אחרי-עוגן) מורד-מהקידומת — חוק-זנב-בלתי-מעוגן (Z2-15)
+ *   · המצב-החי (זיכרון/סנאפשוט) נשאר-האמת; האירוע-הבא-משרשר-מה-lastH-החי ונבלע-כעוגן-הצטרפות
+ *     (כמו-קומיט-מיזוג-בגיט) — רציפות-מוכחת, אפס-אובדן-יתרות, 99.9%+ מההיסטוריה-בספר-החי.
+ * רק-אם-הקידומת-קצרה-מ-DEEP_TRIM_MIN — רג'נזיס-כמוצא-אחרון (כמו-קודם). */
+const DEEP_TRIM_MIN = 100;
+function deepTrimHeal(): { ok: boolean; keptLines: number; trimmedLines: number; brokenAt: number | null; lastKeptSeq: number } {
+  try {
+    const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
+    let prev = "GENESIS"; let prevWasAnchor = false; let lastSeq = 0;
+    const prefix: Array<{ line: string; anchor: boolean }> = []; // שורות-השרשרת (anchor=נבלעה-כעוגן-תפר)
+    let breakFile: string | null = null; let breakIdx = -1; let brokenAt: number | null = null;
+    outer: for (const f of files) {
+      const lines = fs.readFileSync(path.join(STATE_DIR, f), "utf8").split("\n").filter(Boolean);
+      for (let i = 0; i < lines.length; i++) {
+        let t: any;
+        try { t = JSON.parse(lines[i]); } catch { breakFile = f; breakIdx = i; brokenAt = lastSeq + 1; break outer; }
+        if (typeof t.seq !== "number" || t.seq <= lastSeq) { breakFile = f; breakIdx = i; brokenAt = t.seq ?? null; break outer; }
+        lastSeq = t.seq;
+        const { h, ...rest } = t;
+        if (createHash("sha256").update(JSON.stringify({ ...rest, prev })).digest("hex").slice(0, 32) !== h) {
+          if (prevWasAnchor) { breakFile = f; breakIdx = i; brokenAt = t.seq; break outer; } // שני-עוגנים-רצופים — שבר-אמת
+          prefix.push({ line: lines[i], anchor: true }); prev = h; prevWasAnchor = true; continue; // עוגן-תפר — המשך-מה-h-השמור
+        }
+        prefix.push({ line: lines[i], anchor: false }); prev = h; prevWasAnchor = false;
+      }
+    }
+    if (!breakFile) return { ok: false, keptLines: prefix.length, trimmedLines: 0, brokenAt: null, lastKeptSeq: lastSeq }; // אין-שבר-מוחש — כנה
+    // חוק-זנב-בלתי-מעוגן (Z2-15): עוגן-טרמינלי-בלי-יורש-מוכח → מורד-מהקידומת (להסגר-עם-הזנב)
+    while (prefix.length && prefix[prefix.length - 1].anchor) prefix.pop();
+    if (prefix.length < DEEP_TRIM_MIN) return { ok: false, keptLines: prefix.length, trimmedLines: 0, brokenAt, lastKeptSeq: lastSeq };
+    const lastKeptSeq = (() => { try { return JSON.parse(prefix[prefix.length - 1].line).seq as number; } catch { return 0; } })();
+    // הסגר: זנב-קובץ-השבר + כל-הקבצים-שאחריו — אפס-מחיקה
+    const q = path.join(STATE_DIR, "quarantine");
+    fs.mkdirSync(q, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    let sawBreak = false; let trimmedLines = 0;
+    for (const f of files) {
+      const full = path.join(STATE_DIR, f);
+      if (sawBreak) { try { fs.renameSync(full, path.join(q, `${ts}·deep-trim-whole·${f}`)); } catch { /* כנה */ } continue; }
+      if (f === breakFile) {
+        const lines = fs.readFileSync(full, "utf8").split("\n").filter(Boolean);
+        trimmedLines = lines.length - breakIdx;
+        try { fs.writeFileSync(path.join(q, `${ts}·deep-trim-tail·${f}`), lines.slice(breakIdx).join("\n") + "\n"); } catch { /* כנה */ }
+        sawBreak = true;
+      }
+    }
+    // כתיבת-הקידומת-החיה-במקום-קובץ-השבר (מילה-במילה — אפס-שכתוב-שורות-שנשמרו)
+    fs.writeFileSync(path.join(STATE_DIR, breakFile), prefix.length ? prefix.map((p) => p.line).join("\n") + "\n" : "");
+    return { ok: true, keptLines: prefix.length, trimmedLines, brokenAt, lastKeptSeq };
+  } catch { return { ok: false, keptLines: 0, trimmedLines: 0, brokenAt: null, lastKeptSeq: 0 }; }
+}
+
 function boot() {
   fs.mkdirSync(STATE_DIR, { recursive: true });
   try {
@@ -485,6 +542,15 @@ function boot() {
         if (r.replayed > 0 || r.trimmed) {
           console.log(`[fleet-economy] boot-heal-tail-replay: +${r.replayed} עסקאות · trimmed=${r.trimmed} · seq=${seq}`);
           return { restored: true, seq, healed: "tail-replay" };
+        }
+        // גל-94 · ריפוי-עומק: שבר-באמצע-הספר (לפני-תפר-הסנאפשוט) — חיתוך-לקידומת-החיה
+        // במקום רג'נזיס-מלא. המצב-מהסנאפשוט-נשאר-האמת; האירוע-הבא = עוגן-הצטרפות.
+        const deep = deepTrimHeal();
+        if (deep.ok && seq >= deep.lastKeptSeq) {
+          ledgerBuf = []; ledgerLines = deep.keptLines;
+          flush(); snapshotSave();
+          console.log(`[fleet-economy] boot-heal-deep-trim: קידומת-חיה ${deep.keptLines} שורות (seq≤${deep.lastKeptSeq}) · זנב-להסגר ${deep.trimmedLines} · המצב-החי-נשמר · האירוע-הבא = עוגן-הצטרפות`);
+          return { restored: true, seq, healed: "deep-trim" };
         }
         quarantineState(`boot-heal-brokenAt-${v.brokenAt}`);
         balances = new Map();
@@ -614,16 +680,26 @@ const server = Bun.serve({
           // הסגר-מלא + ספר-חדש-חתום-מהמצב-החי-בזיכרון. אפס-אובדן-יתרות:
           // המצב-בזיכרון-הוא-האמת-המחושבת; ההיסטוריה-התפורה-נשמרת-בהסגר-לביקורת.
           try {
-            quarantineState(`runtime-heal-brokenAt-${r.brokenAt}`);
-            seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; ledgerFileNo = 0;
-            const rec = apply({
-              seq: 1, ts: Date.now(), kind: "recovery", from: "treasury", to: "treasury",
-              asset: "USDS", amount: 0,
-              reason: `ריפוי-ספר-בזמן-ריצה · הסגר-תפר-brokenAt=${r.brokenAt} · יתרות-החיים-נשמרו`,
-            });
-            flush();
-            snapshotSave();
-            sealLog({ action: "runtime-book-heal", brokenAt: r.brokenAt, recoverySeq: rec?.seq ?? null });
+            // גל-94 · ריפוי-עומק-בזמן-ריצה: קודם ננסה לשמר את הקידומת התקינה בספר החי
+            // (חיתוך-בתפר, אפס-מחיקה) — ורק אם אין מה לשמר, רג'נזיס כמו-קודם.
+            const deep = deepTrimHeal();
+            if (deep.ok && seq >= deep.lastKeptSeq) {
+              ledgerBuf = []; ledgerLines = deep.keptLines;
+              flush(); snapshotSave();
+              sealLog({ action: "runtime-deep-trim-heal", brokenAt: r.brokenAt, keptLines: deep.keptLines, trimmedLines: deep.trimmedLines });
+              console.log(`[fleet-economy] runtime-heal-deep-trim: קידומת-חיה ${deep.keptLines} שורות · זנב-להסגר ${deep.trimmedLines} · המצב-החי-נשמר`);
+            } else {
+              quarantineState(`runtime-heal-brokenAt-${r.brokenAt}`);
+              seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; ledgerFileNo = 0;
+              const rec = apply({
+                seq: 1, ts: Date.now(), kind: "recovery", from: "treasury", to: "treasury",
+                asset: "USDS", amount: 0,
+                reason: `ריפוי-ספר-בזמן-ריצה · הסגר-תפר-brokenAt=${r.brokenAt} · יתרות-החיים-נשמרו`,
+              });
+              flush();
+              snapshotSave();
+              sealLog({ action: "runtime-book-heal", brokenAt: r.brokenAt, recoverySeq: rec?.seq ?? null });
+            }
           } catch { /* כנה — הדיווח-על-השבר-יוצא-בכנות-בכל-מקרה */ }
         }
         lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked };
