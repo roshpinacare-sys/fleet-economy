@@ -784,6 +784,73 @@ function git(dir: string, args: string[]): Promise<{ ok: boolean; out: string }>
     });
   });
 }
+
+/* ── חוק-איחוד (תיקון-מבני · 5-הבליעות · 2026-10-18 · סנכרון-מ-giant) ────────
+ * merge -s ours / -X ours כשהעץ-המקומי-מיושן = מכונת-הבליעה (משטחי-עמיתים-נמחקים,
+ * כולל-גשר-הפעלת-ה-Hive). החוק-החדש: איחוד-תמיד, אף-צד-לא-נמחק;
+ * כשל-איחוד → fail-closed-כנה (בלי-דחיפה), לעולם-לא-פתרון-השמדתי. */
+async function unionResolveConflicts(dir: string): Promise<{ ok: boolean; resolved: number; note: string }> {
+  const U = await git(dir, ["diff", "--name-only", "--diff-filter=U"]);
+  const files = U.out.split("\n").map((s) => s.trim()).filter(Boolean);
+  let resolved = 0;
+  const notes: string[] = [];
+  for (const f of files) {
+    const s1 = await git(dir, ["show", `:1:${f}`]);
+    const s2 = await git(dir, ["show", `:2:${f}`]);
+    const s3 = await git(dir, ["show", `:3:${f}`]);
+    const hasB = s1.ok, hasO = s2.ok, hasT = s3.ok;
+    try {
+      if (hasO && hasT) {
+        if (s2.out === s3.out) {
+          await git(dir, ["checkout", "--ours", "--", f]);
+        } else if (hasB) {
+          const bf = "/tmp/.u-b", of = "/tmp/.u-o", tf = "/tmp/.u-t";
+          fs.writeFileSync(bf, s1.out); fs.writeFileSync(of, s2.out); fs.writeFileSync(tf, s3.out);
+          const mf = await git(dir, ["merge-file", "--union", "-p", of, bf, tf]);
+          if (!mf.ok) throw new Error("merge-file-fail");
+          fs.writeFileSync(path.join(dir, f), mf.out);
+        } else {
+          fs.writeFileSync(path.join(dir, f), s2.out + (s2.out.endsWith("\n") ? "" : "\n") + s3.out);
+        }
+      } else if (hasT && !hasO) {
+        fs.writeFileSync(path.join(dir, f), s3.out); // עמית-מנצח — אף-שורה-זרה-לא-נמחקת
+        notes.push(`resurrect:${f}`);
+      } else if (hasO && !hasT) {
+        await git(dir, ["add", "--", f]);
+        resolved++;
+        continue;
+      } else {
+        throw new Error("no-sides");
+      }
+      await git(dir, ["add", "--", f]);
+      resolved++;
+    } catch (e) {
+      notes.push(`fail:${f}:${String(e).slice(0, 60)}`);
+    }
+  }
+  const rest = await git(dir, ["diff", "--name-only", "--diff-filter=U"]);
+  return { ok: !rest.out.trim(), resolved, note: notes.join(";").slice(0, 200) };
+}
+
+async function unionSync(dir: string, remote: string): Promise<{ ok: boolean; how: string; note: string }> {
+  await git(dir, ["fetch", remote, "main"]);
+  const anc = await git(dir, ["merge-base", "--is-ancestor", "HEAD", "FETCH_HEAD"]);
+  if (anc.ok) {
+    const ff = await git(dir, ["-c", "merge.autoStash=false", "merge", "--ff-only", "FETCH_HEAD"]);
+    return { ok: ff.ok || ff.out.includes("up to date"), how: "ff", note: ff.out.slice(0, 120) };
+  }
+  const mg = await git(dir, ["-c", "merge.autoStash=false", "merge", "-m", "vault-sync [auto-economy]: union-sync — אף-צד-לא-נמחק (חוק-איחוד)", "FETCH_HEAD"]);
+  if (mg.ok || mg.out.includes("Already up to date") || mg.out.includes("up to date")) {
+    return { ok: true, how: "merge", note: mg.out.slice(0, 120) };
+  }
+  const ur = await unionResolveConflicts(dir);
+  if (!ur.ok) {
+    await git(dir, ["merge", "--abort"]);
+    return { ok: false, how: "union-fail", note: ur.note };
+  }
+  const uc = await git(dir, ["commit", "-q", "-m", `vault-sync [auto-economy]: union-resolved ${ur.resolved} files — איחוד-ללא-מחיקות`]);
+  return { ok: uc.ok || uc.out.includes("nothing to commit"), how: "union", note: `resolved=${ur.resolved}` };
+}
 async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opts?: { strategyOurs?: boolean; excludePaths?: string[]; gc?: boolean; trueMerge?: boolean }): Promise<boolean> {
   // גל-83 · תיקון-תפר-מיזוג: הפרמטר afterPull נמחק-מהחתימה-במיזוג-אך-הקריאה-ב-sealMyProject
   // המשיכה-להעביר-אותו + הגוף-התייחס-אליו → ReferenceError שהרג-את-כל-סבב-האטימה
@@ -816,28 +883,20 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     const rm = await git(dir, ["remote"]);
     const remote = rm.out.split("\n").map((s) => s.trim()).filter(Boolean)[0] ?? "origin";
     if (opts?.trueMerge) {
-      // גל-18 · מיזוג-אמת לפס-הבנאי: המסילות נפרדות (המנוע: state/* · הבנאי-של-הצי:
-      // bootstrap/sovereign-builder/*) → מיזוג-אמת מאחד-שני-העצים בלי-שום-בליעה.
-      // ה-rebase נכשל-תמיד כאן (דורש-worktree-נקי — הלדג'ר-חי-נכתב-תדיד), המיזוג לא.
+      // גל-18 · מיזוג-אמת לפס-הבנאי (מיזוג-אמת-אינו-בולע — נשאר-כפי-שהוא).
       await git(dir, ["fetch", remote, "main"]);
       const mg = await git(dir, ["merge", "--no-edit", "FETCH_HEAD"]);
       if (!mg.ok && !mg.out.includes("Already up to date") && !mg.out.includes("up to date")) {
         sealLog({ repo: name, action: "merge-fail", out: mg.out.slice(0, 220) });
       }
-    } else if (opts?.strategyOurs) {
-      // גל-83 · מסלול-אפס-תפרים (my-project — מחזיק-המצב-החי): merge -s ours לא-נוגע
-      // בעץ-העבודה-כלל — הספר-החי-והקוד-הרצים-שלנו-מנצחים-תמיד, ההיסטוריה-של-הענן
-      // (כולל-קו-הסשן-השני) מקושרת-כהורה-שני. אפס-קונפליקטים, אפס-stash, אפס-תפר.
-      await git(dir, ["fetch", remote, "main"]);
-      const mg = await git(dir, ["merge", "-s", "ours", "-m", "vault-sync [auto-economy]: link cloud history — ours-tree wins, zero-seam", "FETCH_HEAD"]);
-      if (!mg.ok && !mg.out.includes("Already up to date") && !mg.out.includes("up to date")) {
-        sealLog({ repo: name, action: "merge-fail", out: mg.out.slice(0, 200) });
-      }
     } else {
-      // גל-83 · autoStash-חובה + refspec-מפורש (נמדד: pull-בלי-branch נכשל-בלי-upstream).
-      const pull = await git(dir, ["-c", "rebase.autoStash=true", "pull", "--rebase", "-X", "ours", remote, "main"]);
-      if (!pull.ok && !pull.out.includes("Already up to date") && !pull.out.includes("up to date")) {
-        sealLog({ repo: name, action: "pull-fail", out: pull.out.slice(0, 220) });
+      // 2026-10-18 · חוק-האיחוד לכל-השאר (הסרת strategyOurs + -X ours):
+      // FF-כשאפשר, מיזוג+איחוד-סכסוכים-כשלא, fail-closed-כנה.
+      const sync = await unionSync(dir, remote);
+      if (!sync.ok) {
+        sealLog({ repo: name, action: `sync-${sync.how}`, out: sync.note });
+      } else {
+        sealLog({ repo: name, action: "synced", how: sync.how, out: sync.note });
       }
     }
     if (afterPull) { try { await afterPull(); } catch (e) { sealLog({ repo: name, action: "after-pull-fail", error: String(e) }); } }
@@ -922,7 +981,7 @@ async function sealMyProject(opts?: { excludePaths?: string[]; gc?: boolean }): 
         if (preSnap) { try { fs.copyFileSync(preSnap, SNAP); } catch { /* כנה */ } }
         sealLog({ repo: "my-project", action: "state-custody-restore", brokenAt: v.brokenAt, restored });
       }
-    }, { strategyOurs: true, excludePaths: opts?.excludePaths, gc: opts?.gc }); // גל-83 · אפס-תפרים: merge -s ours — לא-נוגע-בעץ-החי-כלל · גל-18 · דלתא+gc
+    }); // 2026-10-18 · חוק-האיחוד: הגנת-המצב-החי ב-custody-restore (מעלה) — לא-בהשמדת-קוד-זר · גל-18 · דלתא+gc
   } finally {
     for (const p of pids) { try { process.kill(p, "SIGCONT"); } catch { /* כנה */ } }
     webFreezeClear();
