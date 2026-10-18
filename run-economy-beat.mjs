@@ -22,6 +22,23 @@ const ANCHOR_BASELINE = 7; // פורנזיה 2026-10-18T04Z (agent-2, גל-93): 
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* גל-94 · watchdog-שרת-הקונסולה: דלת-הבית-של-הבעלים-חייבת-לא-למות. תהליכים-שנולדים-מה-shell-של-סוכן
+ * נשחטים-עם-ה-cgroup-שלו; הפעימה (ילד-מארח-חי-על-עץ-הפלטפורמה) מקימה-את-השרת-כבן-מנותק
+ * (detached+unref) שמתייתם-ל-init אחרי-צאת-הפעימה — בדיוק-כמו-המארחים-עצמם-שרדו. */
+function ensureConsoleServer() {
+  try { execFileSync("pgrep", ["-f", "next dev -p 3000"], { encoding: "utf8" }); return; } catch { /* אין-תהליך */ }
+  try {
+    const code = execFileSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "http://127.0.0.1:3000/"], { encoding: "utf8" }).trim();
+    if (code === "200") return;
+  } catch { /* מת-באמת */ }
+  try {
+    const c = spawn("bash", ["-c", "cd /home/z/my-project && exec ./node_modules/.bin/next dev -p 3000 >> /home/z/my-project/dev.log 2>&1"], { detached: true, stdio: "ignore" });
+    c.unref();
+    console.log("[economy-beat] watchdog: שרת-הקונסולה היה מת — הוקם-מחדש (מנותק-ל-init)");
+  } catch (e) { console.error("[economy-beat] watchdog-שרת נכשל: " + String(e?.message ?? e).slice(-200)); }
+}
+ensureConsoleServer();
+
 /* 0) git-first (גל-94 · חוק-המירוץ-הקנוני, רוח a3d73fa מגל-90 — הפעם על קובץ זה עצמו):
  *    אומץ-את-הספר-הקנוני לפני-כל-זרימה. מקומי-מפוצל = fail-closed exit 3 (אסור לנחש, אסור ours). */
 const g = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();

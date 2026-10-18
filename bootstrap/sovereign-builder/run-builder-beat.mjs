@@ -14,7 +14,7 @@
  * חוקי-בידוד: clone-גיט-פרטי משלו (אפס-נגיעה ב-clone-פעימות-הכלכלה) · כתיבה-רק
  * ל-bootstrap/sovereign-builder/ · הפנקס-קריאה-בלבד · אפס-סודות-בקוד-או-בלוג.
  */
-import { execFileSync } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -30,6 +30,23 @@ const BEAT_STATUS = "/home/z/audit/economy-beat-service-status.json";
 
 // white-list סוגי-פעולה — הבנאי מבצע אך-ורק את אלה. כל-השאר נדחה (fail-closed).
 const KINDS = ["tool-run", "note-open", "report-write", "milestone-tag"];
+
+/* גל-94 · watchdog-שרת-הקונסולה: דלת-הבית-של-הבעלים-חייבת-לא-למות. תהליכים-שנולדים-מה-shell-של-סוכן
+ * נשחטים-עם-ה-cgroup-שלו; לכן הפעימה (ילד-מארח-חי-על-עץ-הפלטפורמה) מקימה-את-השרת-כבן-מנותק
+ * (detached+unref) שמתייתם-ל-init אחרי-צאת-הפעימה — בדיוק-כמו-המארחים-עצמם-שרדו. */
+function ensureConsoleServer() {
+  try { execFileSync("pgrep", ["-f", "next dev -p 3000"], { encoding: "utf8" }); return; } catch { /* אין-תהליך */ }
+  try {
+    const code = execFileSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "http://127.0.0.1:3000/"], { encoding: "utf8" }).trim();
+    if (code === "200") return;
+  } catch { /* מת-באמת */ }
+  try {
+    const c = spawn("bash", ["-c", "cd /home/z/my-project && exec ./node_modules/.bin/next dev -p 3000 >> /home/z/my-project/dev.log 2>&1"], { detached: true, stdio: "ignore" });
+    c.unref();
+    log("watchdog: שרת-הקונסולה היה מת — הוקם-מחדש (מנותק-ל-init)");
+  } catch (e) { log("watchdog-שרת נכשל: " + String(e?.message ?? e).slice(-200)); }
+}
+ensureConsoleServer();
 const TOOLS = {
   verify_chain: {
     title: "אימות-שרשרת בלתי-תלוי (Python-טהור, גל-91)",
