@@ -6,9 +6,9 @@
  *  2. boot על-הספר-הקנוני מהגיט (restored=true אחרת-כישלון).
  *  3. הכלכלה נושמת BEAT_SECONDS (טיקים, שכר, שירותים, AMM, מס — אפס-הדמיות).
  *  4. שער-אמת: /verify חייב ok:true + עוגנים = 3 בדיוק (צמיחה = תפר-חדש = כישלון-ריצה).
- *  5. איטום-המצב-חזרה-לגיט (commit+push, pull --rebase -X ours במקרה-מירוץ).
+ *  5. איטום-המצב-חזרה-לגיט (commit+push; מירוץ → RACE-LOST fail-closed — איסור-מוחלט על pull --rebase -X ours, גל-94).
  */
-import { spawn } from "child_process";
+import { spawn, execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -21,6 +21,29 @@ const PORT = 3016;
 const ANCHOR_BASELINE = 7; // פורנזיה 2026-10-18T04Z (agent-2, גל-93): בסיס-3 ההיסטורי (46335/55120/68276) + 4 תפרי-צומת מתועדים [290040, 294919, 299807, 299847] — משמורת-חירום gal-18 (777941b: ספר-חי 284K+ שניצל אחרי 150,120 אירועים לא-אטומים · 81971ff: היסטוריית-הענן מקושרת כהורה) + מיזוג-שלום-הבנאים ae96189. אומת-בלתי-תלוי (מאמת-פייתון גל-91): ok=true · checked=316,844 · רציפות-מוכחת-על-כל-התפרים. כל-תפר-מעבר ל-7 = אזעקה fail-closed.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* 0) git-first (גל-94 · חוק-המירוץ-הקנוני, רוח a3d73fa מגל-90 — הפעם על קובץ זה עצמו):
+ *    אומץ-את-הספר-הקנוני לפני-כל-זרימה. מקומי-מפוצל = fail-closed exit 3 (אסור לנחש, אסור ours). */
+const g = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+try {
+  g(["fetch", "origin", "main"]);
+  const head = g(["rev-parse", "HEAD"]);
+  const origin = g(["rev-parse", "origin/main"]);
+  if (head !== origin) {
+    const ahead = g(["rev-list", "--count", `${origin}..${head}`]);
+    if (ahead === "0") {
+      g(["merge", "--ff-only", "origin/main"]);
+      console.log(`[economy-beat] git-first · אומץ-קנוני ff ${head.slice(0, 7)}→${origin.slice(0, 7)}`);
+    } else {
+      console.error(`[economy-beat] RACE-LOST-PRE · מקומי-מפוצל (ahead=${ahead}) — fail-closed exit 3`);
+      process.exit(3);
+    }
+  }
+} catch (e) {
+  console.error(`[economy-beat] FAIL git-first: ${String(e?.message ?? e).slice(-300)}`);
+  process.exit(3);
+}
+
 async function getJson(p) {
   try { const r = await fetch(`http://127.0.0.1:${PORT}${p}`); return await r.json(); } catch { return null; }
 }
@@ -85,7 +108,17 @@ await run("git", ["add", "state/ledger.jsonl", "state/snapshot.json", "state/sea
 await run("git", ["commit", "-q", "-m", `[economy-beat] seq=${m?.seq ?? "?"} (+${delta}) · עוגנים=${anchors}/${ANCHOR_BASELINE} · מאומת-מול-הספר`]);
 let push = await run("git", ["push", "origin", "HEAD"]);
 if (push.code !== 0) {
-  await run("git", ["-c", "rebase.autoStash=true", "pull", "--rebase", "-X", "ours", "origin", "main"]);
+  /* גל-94 · חוק-המירוץ: אסור pull --rebase -X ours — ב-rebase ours=origin ולכן העסקאות-שלנו
+   * היו נשתקות בהתנגשות על state/ledger.jsonl (קרע-שקט בספר). במקום: RACE-LOST fail-closed —
+   * אם הקנוני התקדם מעל ההורה-שלנו, האיטום-שלנו הפסיד: מאמצים-קנוני ומוותרים-כנה; המארח יחזור בעוד 10 דק'. */
+  await run("git", ["fetch", "origin", "main"]);
+  const parent = (await run("git", ["rev-parse", "HEAD~1"])).o.trim();
+  const originNow = (await run("git", ["rev-parse", "origin/main"])).o.trim();
+  if (parent === originNow) {
+    console.log("[economy-beat] RACE-LOST — הקנוני קידם כותב-אחר; מאמץ-קנוני fail-closed (איטום-זה יוחלף בפעימה-הבאה)");
+    await run("git", ["reset", "--hard", "origin/main"]);
+    process.exit(3);
+  }
   push = await run("git", ["push", "origin", "HEAD"]);
 }
 console.log(`[economy-beat] איטום: ${push.code === 0 ? "נדחף-לגיט" : "push-fail: " + push.o.slice(-200)}`);
