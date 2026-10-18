@@ -1,16 +1,35 @@
 {
   "schema": "sovereign-builder-state/v1",
   "createdAt": "2026-10-18T11:12:18.189Z",
-  "backlog": [],
-  "growthLogCount": 6,
-  "acts": 2,
-  "metrics": 4,
-  "brainCalls": 0,
-  "brainOffers": 0,
-  "seals": 3,
+  "backlog": [
+    {
+      "kind": "tool-run",
+      "title": "סטטיסטיקת-פנקס חיה",
+      "detail": "",
+      "tool": "ledger_stats",
+      "at": "2026-10-18T13:12:43.865Z",
+      "by": "brain"
+    },
+    {
+      "kind": "tool-run",
+      "title": "דוח-בריכה-ואוצר",
+      "detail": "",
+      "tool": "price_report",
+      "at": "2026-10-18T13:12:43.865Z",
+      "by": "brain"
+    }
+  ],
+  "growthLogCount": 9,
+  "acts": 3,
+  "metrics": 5,
+  "brainCalls": 1,
+  "brainOffers": 3,
+  "seals": 4,
   "sealFailures": 0,
-  "capabilities": [],
-  "lastKind": "tool-run",
-  "lastAt": "2026-10-18T12:42:38.608Z",
+  "capabilities": [
+    "מעקב מחיר"
+  ],
+  "lastKind": "note-open",
+  "lastAt": "2026-10-18T13:12:43.865Z",
   "lastVerdict": "פעימה-הושלמה"
 }
