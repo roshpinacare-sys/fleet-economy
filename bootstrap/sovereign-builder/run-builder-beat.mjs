@@ -137,6 +137,14 @@ function loadState() {
 }
 function saveState(s) {
   fs.mkdirSync(STATE_DIR, { recursive: true });
+  /* גל-97 · תיקון-דריסה: recordToolUsage כותב toolStats-ישירות-לקובץ; saveState-של-הפעימה
+   * כותב-מהזיכרון והיה-מוחק-אותם. מיזוג-שומר: toolStats-מהקובץ-הקיים תמיד-שורד. */
+  try {
+    const prev = JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) as Record<string, unknown>;
+    if (prev && typeof prev === "object" && prev.toolStats && typeof prev.toolStats === "object") {
+      s.toolStats = { ...(prev.toolStats as Record<string, unknown>), ...(s.toolStats as Record<string, unknown> | undefined) };
+    }
+  } catch { /* אין-קובץ-קודם — כלום-לשמר */ }
   fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2) + "\n");
 }
 function appendGrowth(obj) {
