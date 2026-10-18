@@ -144,7 +144,11 @@ if (push.code !== 0) {
   await run("git", ["fetch", "origin", "main"]);
   const parent = (await run("git", ["rev-parse", "HEAD~1"])).o.trim();
   const originNow = (await run("git", ["rev-parse", "origin/main"])).o.trim();
-  if (parent === originNow) {
+  if (parent !== originNow) {
+    /* גל-96 · סגירת-חור-חוק-המירוץ: הקנוני זז ל-commit שאיננו ההורה-שלנו (למשל חתימת-בנאי).
+     * עד-היום: push-חוזר-סרק → הריפו נשאר מפוצל (rc=1) עד-התערבות-יד (אירוע 11:12Z).
+     * מעכשיו: RACE-LOST מיידי — האיטום חוזר בפעימה-הבאה על-גבי הקנוני-החדש.
+     * ניסיון-push-חוזר כשר רק כשהקנוני בדיוק ההורה-שלנו (כשל-חולף, לא מירוץ). */
     console.log("[economy-beat] RACE-LOST — הקנוני קידם כותב-אחר; מאמץ-קנוני fail-closed (איטום-זה יוחלף בפעימה-הבאה)");
     await run("git", ["reset", "--hard", "origin/main"]);
     process.exit(3);

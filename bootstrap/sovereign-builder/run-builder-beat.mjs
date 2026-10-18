@@ -23,7 +23,19 @@ const CLONE = "/home/z/audit/fleet-economy-builder";      // ה-clone-הפרטי
 const STATE_DIR = "/home/z/audit/sovereign-builder/state";
 const STATE_FILE = `${STATE_DIR}/builder-state.json`;
 const GROWTH_LOG = `${STATE_DIR}/growth-log.jsonl`;
-const VM_VENV_PY = "/home/z/audit/sovereign-vm/venv/bin/python";
+/* גל-96 · פתרון-אפמרליות: סביבת-ה-VM נמחקה ב-reboot (11:11Z) → זה שורש “acts=0”:
+ * הרצת-כלים הייתה תלויה ב-venv-מחוץ-לגיט. רזולוציית-פייתון-שכבתית: venv-ארסנלי קודם,
+ * נפילה-מדורגת לפייתון-מערכת — כל-הכלים stdlib-טהורים ולכן רצים-בכל-סביבה. */
+const PY_CANDIDATES = [
+  "/home/z/audit/sovereign-vm/venv/bin/python",
+  "/home/z/.venv/bin/python3",
+  "/usr/bin/python3",
+  "/usr/local/bin/python3",
+];
+function pyBin() {
+  for (const p of PY_CANDIDATES) if (fs.existsSync(p)) return p;
+  return null;
+}
 const BRAIN_URL = "http://127.0.0.1:3000/api/giant/builder-brain"; // גל-95: נתיב-קנוני-אחרי-קציר-3 (ה-saos-הישן-נעלם-בשחזור)
 const LEDGER = `${ESTATE}/state/ledger.jsonl`;
 const BEAT_STATUS = "/home/z/audit/economy-beat-service-status.json";
@@ -60,13 +72,27 @@ function ensureEconomyHost() {
   } catch (e) { log("watchdog-לב נכשל: " + String(e?.message ?? e).slice(-200)); }
 }
 ensureEconomyHost();
+/* מרשם-הכלים-החי (גל-96) — מתואם 1:1 עם TOOLS ב-api/giant/builder-brain (קונסולה)
+ * ומתועד ב-bootstrap/sovereign-builder/TOOLS.md. הוספת-כלי = שלשה-קנונית:
+ * סקריפט ב-sovereign-vm + כאן + במוח. */
 const TOOLS = {
   verify_chain: {
     title: "אימות-שרשרת בלתי-תלוי (Python-טהור, גל-91)",
     args: () => [`${ESTATE}/bootstrap/sovereign-vm/verify_chain.py`, LEDGER],
     cwd: ESTATE,
   },
+  ledger_stats: {
+    title: "סטטיסטיקת-פנקס: ספירה, טווח-seq, היסטוגרמת-סוגים (גל-96)",
+    args: () => [`${ESTATE}/bootstrap/sovereign-vm/ledger_stats.py`, LEDGER],
+    cwd: ESTATE,
+  },
+  price_report: {
+    title: "דוח-בריכה-ואוצר: מחיר-מחושב, עמלות, אוצר (גל-96)",
+    args: () => [`${ESTATE}/bootstrap/sovereign-vm/price_report.py`, `${ESTATE}/state/snapshot.json`],
+    cwd: ESTATE,
+  },
 };
+const PLAYBOOK = ["verify_chain", "ledger_stats", "price_report"]; // סבב-קבוע גם-בלי-מוח
 
 function log(msg) {
   const line = `[builder-beat] ${new Date().toISOString()} ${msg}`;
@@ -173,17 +199,20 @@ function actOnItem(item) {
     const toolKey = String(item.tool ?? "");
     const tool = TOOLS[toolKey];
     if (!tool) return { ok: false, why: `כלי-לא-רשום: ${toolKey.slice(0, 24)}` };
-    if (toolKey === "verify_chain" && !fs.existsSync(VM_VENV_PY))
-      return { ok: false, why: "סביבת-VM-ארסנל-חסרה" };
+    const py = pyBin();
+    if (!py) return { ok: false, why: "אף-פייתון-לא-זמין" };
     try {
-      const out = execFileSync(VM_VENV_PY, tool.args(), { cwd: tool.cwd, encoding: "utf8", timeout: 180_000 });
+      const out = execFileSync(py, tool.args(), { cwd: tool.cwd, encoding: "utf8", timeout: 180_000 });
       const okLine = out.match(/ok\s*[:=]\s*(true|false)/i);
       const checked = out.match(/checked=(\d+)/);
-      const anchors = out.match(/anchors=\[([^\]]*)\]/);
+      const seqLast = out.match(/seqLast=(\d+)/);
+      const price = out.match(/price=([\d.]+)/);
+      /* גל-96 · תיקון-באג-רישיות: python מדפיס “ok=True” — ההשוואה הקשה “True”===“true”
+       * הפכה הצלחות-אמת לכישלונות. toLowerCase חובה. */
       return {
-        ok: okLine ? okLine[1] === "true" : false,
-        why: `ok=${okLine?.[1] ?? "?"} checked=${checked?.[1] ?? "?"} anchors=${anchors?.[1] ?? "?"}`,
-        meta: { tool: toolKey },
+        ok: okLine ? okLine[1].toLowerCase() === "true" : false,
+        why: (out.trim().split("\n")[0] ?? "").slice(0, 140) || "ok=?",
+        meta: { tool: toolKey, checked: checked?.[1], seqLast: seqLast?.[1], price: price?.[1] },
       };
     } catch (e) {
       return { ok: false, why: `הרצת-הכלי-נכשלה: ${String(e?.message ?? e).slice(0, 120)}` };
@@ -258,7 +287,7 @@ function seal() {
       fs.writeFileSync(`${CLONE}/bootstrap/sovereign-builder/state/growth-log.jsonl`, tail);
     } catch {}
 
-    git(["add", "bootstrap/sovereign-builder"]);
+    git(["add", "bootstrap/sovereign-builder", "bootstrap/sovereign-vm"]);
     const staged = git(["diff", "--cached", "--name-only"]);
     if (!staged) return { ok: true, why: "אין-שינויים-לאיטום" };
 
@@ -300,6 +329,15 @@ async function main() {
     }
     state.brainOffers += added;
     if (added > 0) appendGrowth({ kind: "brain-offers", added });
+  }
+
+  /* גל-96 · פלייבוק-קבוע: אם-המוח-לא-זמין ואין-backlog — הבנאי בכל-זאת פועל (סבב-כלים).
+   * מנדט-הבעלים: “בנייה-ושיפור-תמידי” — אפס-פעימות-ריקות-מידיים, גם-בכשל-מוח. */
+  if (!brain.available && state.backlog.length === 0) {
+    const tool = PLAYBOOK[state.acts % PLAYBOOK.length];
+    state.backlog.push({ kind: "tool-run", title: `פלייבוק-ריבוני: ${tool}`, detail: "הרצת-כלי-ארסנל-קבועה (גל-96)", tool, at: new Date().toISOString(), by: "playbook" });
+    appendGrowth({ kind: "playbook", tool });
+    log(`PLAYBOOK → ${tool} (המוח-לא-זמין)`);
   }
 
   // act — פריט-אחד-מה-backlog בכל-פעימה (מדוד-וקצבי)
