@@ -3,32 +3,49 @@
   "createdAt": "2026-10-18T11:12:18.189Z",
   "backlog": [
     {
-      "kind": "tool-run",
-      "title": "דוח-בריכה-ואוצר",
-      "detail": "",
-      "tool": "price_report",
-      "at": "2026-10-18T13:12:43.865Z",
-      "by": "brain"
-    },
-    {
       "kind": "note-open",
       "title": "סטטיסטיקות-מסלול",
       "detail": "",
       "at": "2026-10-18T13:32:59.144Z",
       "by": "brain"
+    },
+    {
+      "kind": "note-open",
+      "title": "בדיקת עסקאות חשודות",
+      "detail": "",
+      "at": "2026-10-18T13:34:35.035Z",
+      "by": "brain"
+    },
+    {
+      "kind": "tool-run",
+      "title": "סטטיסטיקת-פנקס חיה",
+      "detail": "",
+      "tool": "ledger_stats",
+      "at": "2026-10-18T13:34:35.035Z",
+      "by": "brain"
     }
   ],
-  "growthLogCount": 12,
-  "acts": 4,
-  "metrics": 6,
-  "brainCalls": 2,
-  "brainOffers": 4,
-  "seals": 5,
+  "growthLogCount": 15,
+  "acts": 5,
+  "metrics": 7,
+  "brainCalls": 3,
+  "brainOffers": 6,
+  "seals": 6,
   "sealFailures": 0,
   "capabilities": [
     "מעקב מחיר"
   ],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-18T13:32:59.226Z",
-  "lastVerdict": "פעימה-הושלמה"
+  "lastAt": "2026-10-18T13:34:35.070Z",
+  "lastVerdict": "פעימה-הושלמה",
+  "toolStats": {
+    "price_report": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-18T13:34:35.070Z",
+      "lastResult": "ok=True seq=167 price=7.549717 fees=0.843494 treasuryUsds=1.207314",
+      "lastAt": "2026-10-18T13:34:35.070Z"
+    }
+  }
 }
