@@ -39,6 +39,19 @@ function ensureConsoleServer() {
 }
 ensureConsoleServer();
 
+/* גל-95 · מעגל-החייאה-ההדדית: הלב-מחיה-גם-את-מארח-הבנאי. שיעור-08:11Z: שכבת-instrumentation
+ * של-הקונסולה-יכולה-ליפול-שקט (ואז-אף-אחד-לא-מחיה-מארחים) — לכן-כל-פעימה-חיה-מארחים-משלימים
+ * בעצמה. מעגל-סגור: לב→בנאי+קונסולה · בנאי→לב+קונסולה · instrumentation→הכל (כשהוא-חי). */
+function ensureSovereignHosts() {
+  try { execFileSync("pgrep", ["-f", "sovereign-builder-host.mjs"], { encoding: "utf8" }); return; } catch { /* אין-מארח */ }
+  try {
+    const c = spawn("bun", ["/home/z/my-project/sovereign-builder-host.mjs"], { detached: true, stdio: "ignore" });
+    c.unref();
+    console.log("[economy-beat] watchdog-גל-95: מארח-הבנאי-היה-מת — הוקם-מחדש (מנותק-ל-init)");
+  } catch (e) { console.error("[economy-beat] watchdog-בנאי נכשל: " + String(e?.message ?? e).slice(-200)); }
+}
+ensureSovereignHosts();
+
 /* 0) git-first (גל-94 · חוק-המירוץ-הקנוני, רוח a3d73fa מגל-90 — הפעם על קובץ זה עצמו):
  *    אומץ-את-הספר-הקנוני לפני-כל-זרימה. מקומי-מפוצל = fail-closed exit 3 (אסור לנחש, אסור ours). */
 const g = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();

@@ -47,6 +47,19 @@ function ensureConsoleServer() {
   } catch (e) { log("watchdog-שרת נכשל: " + String(e?.message ?? e).slice(-200)); }
 }
 ensureConsoleServer();
+
+/* גל-95 · מעגל-החייאה-ההדדית: הבנאי-מחיה-גם-את-לב-הכלכלה. שיעור-08:11Z: שכבת-instrumentation
+ * של-הקונסולה-יכולה-ליפול-שקט (ואז-אף-אחד-לא-מחיה-מארחים) — לכן-כל-פעימה-חיה-מארחים-משלימים
+ * בעצמה. מעגל-סגור: לב→בנאי+קונסולה · בנאי→לב+קונסולה · instrumentation→הכל (כשהוא-חי). */
+function ensureEconomyHost() {
+  try { execFileSync("pgrep", ["-f", "economy-beat-host.mjs"], { encoding: "utf8" }); return; } catch { /* אין-מארח */ }
+  try {
+    const c = spawn("bun", ["/home/z/my-project/economy-beat-host.mjs"], { detached: true, stdio: "ignore" });
+    c.unref();
+    log("watchdog-גל-95: מארח-הלב-היה-מת — הוקם-מחדש (מנותק-ל-init)");
+  } catch (e) { log("watchdog-לב נכשל: " + String(e?.message ?? e).slice(-200)); }
+}
+ensureEconomyHost();
 const TOOLS = {
   verify_chain: {
     title: "אימות-שרשרת בלתי-תלוי (Python-טהור, גל-91)",
