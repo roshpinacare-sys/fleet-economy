@@ -785,6 +785,40 @@ function git(dir: string, args: string[]): Promise<{ ok: boolean; out: string }>
   });
 }
 
+/* ── גל-98 · רפואת-remote עצמית (שורש: אובדן-הכספת השקטה) ────────────────────
+ * נמדד 2026-10-18T14:50Z: אחרי-העלאת-סנדבוקס, .git/config של my-project עלה
+ * בלי-אף-remote → כל-קומיטי vault-seal היו מקומיים-בלבד מעולם (הפנקס ריק מ-refs/remotes)
+ * → כל-פלטפורמת-ה-Next.js חיה-רק-על-דיסק-אפמרלי = הפרת-חוק-הבעלים החמורה-ביותר.
+ * התיקון: sealRepo לא סומך על-מצב-המכונה — אם-אין-רימוטים, הוא בונה "cloud"
+ * לפי-מפת-ריפו מוכרת + token שנשאב-מה-origin-של-השירות-עצמו (לעולם-לא-נכתב-לקנון). */
+const SEAL_REMOTE_MAP: Record<string, string> = {
+  "my-project": "saos-console-zai",
+  "fleet-economy": "fleet-economy",
+  "coord-work": "saos-coordination",
+  "FleetHQ": "FleetHQ",
+  "Domain": "Domain",
+  "Console": "Console",
+  "Pulse": "Pulse",
+  "Sandbox": "Sandbox",
+  "roshpina": "roshpina",
+  "saos-dex": "saos-dex",
+};
+async function ensureSealRemote(dir: string): Promise<string> {
+  const rm = await git(dir, ["remote"]);
+  const existing = rm.out.split("\n").map((s) => s.trim()).filter(Boolean)[0];
+  if (existing) return existing;
+  const base = dir.split("/").filter(Boolean).pop()!;
+  const target = SEAL_REMOTE_MAP[base];
+  if (!target) { sealLog({ repo: base, action: "remote-selfheal-skip", reason: "no-map-entry" }); return "origin"; }
+  const selfUrl = await git(import.meta.dir, ["config", "--get", "remote.origin.url"]);
+  const tok = /:\/\/[^:]+:([^@]+)@/.exec(selfUrl.out)?.[1] ?? process.env.GITHUB_TOKEN ?? "";
+  if (!tok) { sealLog({ repo: base, action: "remote-selfheal-skip", reason: "no-token" }); return "origin"; }
+  const url = `https://x-access-token:${tok}@github.com/roshpinacare-sys/${target}.git`;
+  const added = await git(dir, ["remote", "add", "cloud", url]);
+  if (added.ok) { sealLog({ repo: base, action: "remote-selfheal", target }); return "cloud"; }
+  return "origin";
+}
+
 /* ── חוק-איחוד (תיקון-מבני · 5-הבליעות · 2026-10-18 · סנכרון-מ-giant) ────────
  * merge -s ours / -X ours כשהעץ-המקומי-מיושן = מכונת-הבליעה (משטחי-עמיתים-נמחקים,
  * כולל-גשר-הפעלת-ה-Hive). החוק-החדש: איחוד-תמיד, אף-צד-לא-נמחק;
@@ -880,8 +914,8 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     // נמדד: כל-הסוופים-נכשלו-על-my-project ("'origin' does not appear to be a git repository")
     // → הכספת-המקומית-נשארה-לא-דחופה-37-קומיטים, והעותק-ב-channels/giant (אותו-ריפו-בגיטהאב!)
     // דחף-במקומה-מצב-ישן-וקידם-את-הענן — מקור-תפרי-הספר-ההיסטוריים.
-    const rm = await git(dir, ["remote"]);
-    const remote = rm.out.split("\n").map((s) => s.trim()).filter(Boolean)[0] ?? "origin";
+    // גל-98 · רפואת-remote-עצמית: אם-המכונה-עלתה-בלי-רימוטים — מבטיחים-אחד-לפני-כל-סוופ.
+    const remote = await ensureSealRemote(dir);
     if (opts?.trueMerge) {
       // גל-18 · מיזוג-אמת לפס-הבנאי (מיזוג-אמת-אינו-בולע — נשאר-כפי-שהוא).
       await git(dir, ["fetch", remote, "main"]);
