@@ -17,7 +17,7 @@ import { describe, test, expect } from "bun:test";
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
-import { fromF, toF, muToStr, splitFee, ammOut, type Mu } from "../lib/mu";
+import { fromF, toF, muToStr, splitFee, ammOut, splitRouting, type Mu } from "../lib/mu";
 
 const FEE_BPS = 30;
 const rnd6 = (lo: number, hi: number) => Math.round((lo + Math.random() * (hi - lo)) * 1e6) / 1e6;
@@ -233,5 +233,37 @@ describe("הספר-החי — אימות קריאה-בלבד (אם-נוכח)", (
     if (prevWasAnchor && anchors.length > 0) throw new Error(`זנב-בלתי-מעוגן @ seq ${anchors[anchors.length - 1]}`);
     expect(anchors.length).toBeLessThanOrEqual(3); // צמיחת-עוגנים = אזעקה
     expect(checked).toBeGreaterThan(0);
+  });
+});
+
+/* ═══ G28 · חוק-ניתוב-הנזילות (גל-109 · agent-2) ═══
+ * המדיניות המוצהרת (ext-policy.json poolPct) מפצלת כל ext-deposit:
+ * poolMu = ⌊total×pct/100⌋ → בריכת-SAOS/USDS · היתר → כספת-ריבונית.
+ * החוק-הנועל: שימור-מדויק (pool+tre === total) · רצפה-לכספת · fail-closed. */
+describe("G28 · פיצול-ניתוב-נזילות (splitRouting)", () => {
+  test("שימור-מדויק: poolMu + treMu === totalMu (500K קלטים אקראיים × pct 0..100)", () => {
+    for (let i = 0; i < 500_000; i++) {
+      const total = BigInt(Math.floor(Math.random() * 1e12));
+      const pct = Math.floor(Math.random() * 101);
+      const { poolMu, treMu } = splitRouting(total, pct);
+      expect(poolMu + treMu).toBe(total);
+      expect(poolMu >= 0n && treMu >= 0n).toBe(true);
+      expect(poolMu).toBe((total * BigInt(pct)) / 100n); // רצפה-מדויקת-כחוק
+    }
+  });
+  test("fail-closed: pct פגום/מחוץ-לטווח = 0 (הכל-לכספת — אף-הפתעה-לא)", () => {
+    expect(splitRouting(1_000_000n, NaN).poolMu).toBe(0n);
+    expect(splitRouting(1_000_000n, Infinity).poolMu).toBe(0n);
+    expect(splitRouting(1_000_000n, 999).poolMu).toBe(0n);
+    expect(splitRouting(1_000_000n, -5).poolMu).toBe(0n);
+    expect(splitRouting(1_000_000n, 0).treMu).toBe(1_000_000n);
+  });
+  test("ערכי-קצה: pct=100 הכל-לבריכה · אבק-נשאר-בכספת · ירי-ה-G27 ההיסטורי 42.5@25%", () => {
+    expect(splitRouting(1_000_000n, 100)).toEqual({ poolMu: 1_000_000n, treMu: 0n });
+    expect(splitRouting(7n, 50)).toEqual({ poolMu: 3n, treMu: 4n }); // רצפה: האבק-בכספת
+    const live = splitRouting(fromF(42.5), 25); // זרימת-הירי-הראשונה — מדידה-נגדית
+    expect(live.poolMu).toBe(10_625_000n); // 10.625 USDS
+    expect(live.treMu).toBe(31_875_000n); // 31.875 USDS
+    expect(live.poolMu + live.treMu).toBe(fromF(42.5));
   });
 });
