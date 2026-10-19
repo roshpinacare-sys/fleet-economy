@@ -217,6 +217,7 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   if (t.kind === "ext-deposit") {
     // גל-109 · ייבוא-חוץ: המקור בעולם-החוץ (venue+txid+ref — מאומת-בשער-הקליטה),
     // אין-חיוב-מקור-פנים — רק-זיכוי-יעד. חוק-איזון-כפול נאכף בשער (סכום-חיובי-סופי · ref-יחיד).
+    if (t.ref) rememberRef(String(t.ref)); // dedup-מהמקור: כל-apply של-ext-deposit רושם-את-ה-ref
     (to as any)[field] += amtMu;
     extImportedMu += amtMu; extCount++;
     byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
@@ -433,8 +434,15 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         const from = bal(t.from), to = bal(t.to);
         const field = t.asset === "USDS" ? "usds" : "saos";
         const amtMu = fromF(t.amount); // גל-87 · אריתמטיקה-זהה-מילה-במילה-ל-apply
-        if ((from as any)[field] < amtMu) { seamIdx = i; seamFile = f; break outer; } // מצב-לא-עקבי-עם-הספר → תפר-כנה
-        if (t.kind === "stake") { from.saos -= amtMu; from.saosStaked += amtMu; }
+        if (t.kind === "ext-deposit") {
+          // גל-109 · גל-27 · replay-משקף-apply (חוק-גל-86): מקור-חוץ — אין-חיוב,
+          // זיכוי-יעד + מדידה + רישום-ref (הגנת-חלון-קריסה: בליעה-ב-boot-אחרי-replay
+          // של-זנב-עם-ext-deposit תדדף-דרך-seenRefs — אפס-זיכוי-כפול).
+          if (t.ref) rememberRef(String(t.ref));
+          (to as any)[field] += amtMu;
+          extImportedMu += amtMu; extCount++;
+        } else if ((from as any)[field] < amtMu) { seamIdx = i; seamFile = f; break outer; } // מצב-לא-עקבי-עם-הספר → תפר-כנה
+        else if (t.kind === "stake") { from.saos -= amtMu; from.saosStaked += amtMu; }
         else if (t.kind === "unstake") {
           if (from.saosStaked < amtMu) { seamIdx = i; seamFile = f; break outer; }
           from.saosStaked -= amtMu; to.saos += amtMu;
@@ -671,7 +679,7 @@ function ingestExtFlows() {
     });
     if (tx) { rememberRef(ref); ok++; } else bad++;
   }
-  extCount += ok; extDedup += dedup; extBad += bad;
+  extDedup += dedup; extBad += bad; // extImported/extCount-נמדדים-ב-apply בלבד (מקור-אמת-יחיד)
   if (ok || dedup || bad) console.log(`[fleet-economy] ext-flows: ingested=${ok} dedup=${dedup} bad=${bad}`);
 }
 
