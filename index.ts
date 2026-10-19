@@ -32,6 +32,7 @@ const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
 const LEDGER = path.join(STATE_DIR, "ledger.jsonl");
 const SNAP = path.join(STATE_DIR, "snapshot.json");
+const EXT_FLOWS = path.join(STATE_DIR, "ext-flows.jsonl"); // גל-109 · שער-הזרימות-החוץ (G27): כותב-יחיד=console-API · קורא=המנוע
 const TICK_MS = 800; // גל-85: 900→800 (תקורה-זעירה — flush הוא append-בלבד)
 const SNAP_MS = 30_000;
 const FEE_BPS = 30; // 0.3%
@@ -119,6 +120,11 @@ const tailRing: Tx[] = []; // last 500 for /ledger reads
  *  droppedTx = עסקאות-אירוע שאבדו (מוצא-נכשל או דחיית-איזון סופית) — מוצג ב-/metrics.
  */
 let ingestOk = 0, ingestDedup = 0, ingestFailed = 0, ingestBad = 0;
+/* גל-109 · שער-הזרימות-החוץ (G27 · מנדט-בעלים-HTX): ייבוא-נזילות-חוץ בעלת-מקור
+ * (provenance: venue·txid·ref) — תוצאות-המסחר של סוכן-ה-HTX נקלטות בכספת-הריבונית
+ * כ-ext-deposit חתום-בשרשרת. כותב-יחיד לקובץ: console-API (fail-closed על
+ * .secrets/ext-flow.key) · המנוע קורא-בלבד ב-boot. אפס-סודות בספר או בקוד. */
+let extImportedMu = 0n, extCount = 0, extDedup = 0, extBad = 0;
 const seenRefs = new Map<string, number>(); // ref → ts (דהיות: פקודות-כפולות של מפיקים לא נספרות פעמיים)
 const SEEN_REFS_CAP = 20_000;
 const SEEN_REFS_SNAP = 5_000; // כמה-refs-שורדים-ב-snapshot (האחרונים-ראשית — Map שומר-סדר-הכנסה)
@@ -208,6 +214,20 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   const from = bal(t.from), to = bal(t.to);
   const field = t.asset === "USDS" ? "usds" : "saos";
   const amtMu = fromF(t.amount);
+  if (t.kind === "ext-deposit") {
+    // גל-109 · ייבוא-חוץ: המקור בעולם-החוץ (venue+txid+ref — מאומת-בשער-הקליטה),
+    // אין-חיוב-מקור-פנים — רק-זיכוי-יעד. חוק-איזון-כפול נאכף בשער (סכום-חיובי-סופי · ref-יחיד).
+    (to as any)[field] += amtMu;
+    extImportedMu += amtMu; extCount++;
+    byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
+    byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
+    const signed = sealTx(t);
+    seq = signed.seq; lastH = signed.h;
+    recent.push(signed.ts);
+    byKind[signed.kind] = (byKind[signed.kind] ?? 0) + 1;
+    persist(signed);
+    return signed;
+  }
   if ((from as any)[field] < amtMu) { rej(); return null; }
   if (t.kind === "stake") {
     from.saos -= amtMu; from.saosStaked += amtMu;
@@ -525,6 +545,8 @@ function boot() {
       byKind = s.byKind ?? {}; byAccount = s.byAccount ?? {}; rejected = s.rejected ?? 0; errors = s.errors ?? 0;
       ledgerFileNo = s.ledgerFileNo ?? 0;
       ingestOk = s.ingestOk ?? 0; ingestDedup = s.ingestDedup ?? 0; ingestFailed = s.ingestFailed ?? 0; ingestBad = s.ingestBad ?? 0;
+      // גל-109 · שער-הזרימות-החוץ: המדידות-שורדות-דורות
+      extImportedMu = fromF(Number(s.extImported ?? 0)); extCount = s.extCount ?? 0; extDedup = s.extDedup ?? 0; extBad = s.extBad ?? 0;
       // גל-87 · שימור-המדידה: attemptsTotal חייב לשרוד עלייה — בלי-זה acceptancePct מוצג
       // שלילי-מטופש (rejected היסטורי מול attempts צעירים). נמדד: -129163.1% אחרי-עלייה.
       if (typeof s.attemptsTotal === "number" && s.attemptsTotal > attemptsTotal) attemptsTotal = s.attemptsTotal;
@@ -623,6 +645,36 @@ function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; ancho
   return { ok: true, checked, anchors };
 }
 
+/* גל-109 · בליעת-זרימות-החוץ (G27): קריאה-ב-boot-בלבד (אחרי-shחזור-seenRefs →
+ * dedup-חוצה-דורות). כל-שורה = הפקדה-אמת-מחוץ → עסקת ext-deposit חתומה.
+ * fail-honest: שורה-פגומה/סכום-שלילי/ref-חסר נספר extBad-ולא-נכתב. */
+function ingestExtFlows() {
+  let lines: string[] = [];
+  try { lines = fs.readFileSync(EXT_FLOWS, "utf8").split("\n").filter(Boolean); } catch { return; }
+  let ok = 0, dedup = 0, bad = 0;
+  for (const line of lines) {
+    let f: any = null;
+    try { f = JSON.parse(line); } catch { bad++; continue; }
+    const ref = typeof f?.ref === "string" ? f.ref.trim().slice(0, 80) : "";
+    const venue = typeof f?.venue === "string" ? f.venue.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 24) : "";
+    const amt = Number(f?.amountUsd);
+    if (!ref || !venue || !Number.isFinite(amt) || amt <= 0 || amt > 100_000) { bad++; continue; }
+    if (seenRefs.has(ref)) { dedup++; continue; }
+    const note = typeof f?.note === "string" ? f.note.slice(0, 160) : "";
+    const ts = Number(f?.ts);
+    const tx = apply({
+      seq: seq + 1, ts: Number.isFinite(ts) && ts > 0 ? ts : Date.now(),
+      kind: "ext-deposit", from: `ext:${venue}`, to: "treasury", asset: "USDS",
+      amount: Number(amt.toFixed(6)),
+      reason: `ייבוא-נזילות-חוץ · ${venue}${f?.kind ? " · " + String(f.kind).slice(0, 24) : ""}${note ? " · " + note : ""}`,
+      ref,
+    });
+    if (tx) { rememberRef(ref); ok++; } else bad++;
+  }
+  extCount += ok; extDedup += dedup; extBad += bad;
+  if (ok || dedup || bad) console.log(`[fleet-economy] ext-flows: ingested=${ok} dedup=${dedup} bad=${bad}`);
+}
+
 /* ── HTTP ─────────────────────────────────────────────────────────────────── */
 function priceUsdsPerSaos() { const s = toF(pool.saos); return s > 0 ? toF(pool.usds) / s : 0; } // תצוגה/החלטה-בלבד (גל-87)
 function countsWindow(ms: number) { const cutoff = Date.now() - ms; let c = 0; for (let i = recent.length - 1; i >= 0; i--) { if (recent[i] >= cutoff) c++; else break; } return c; }
@@ -634,7 +686,9 @@ function snapshotSave() {
   const obj = { v: 3, savedAt: Date.now(), seq, lastH,
     balances: Object.fromEntries([...balances].map(([k, v]) => [k, { usds: toF(v.usds), saos: toF(v.saos), saosStaked: toF(v.saosStaked) }])),
     pool: { saos: toF(pool.saos), usds: toF(pool.usds), feesUsds: toF(pool.feesUsds), feesSaos: toF(pool.feesSaos) },
-    byKind, byAccount, rejected, errors, ledgerFileNo, ingestOk, ingestDedup, ingestFailed, ingestBad, attemptsTotal, seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
+    byKind, byAccount, rejected, errors, ledgerFileNo, ingestOk, ingestDedup, ingestFailed, ingestBad, attemptsTotal,
+    extImported: toF(extImportedMu), extCount, extDedup, extBad,
+    seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
   const tmp = SNAP + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(obj));
   fs.renameSync(tmp, SNAP);
@@ -659,6 +713,7 @@ const server = Bun.serve({
           ratePerHour: +(countsWindow(3_600_000)).toFixed(0), projectedPerDay: +(countsWindow(3_600_000) * 24).toFixed(0),
           runRatePerHour, runProjectedPerDay: runRatePerHour !== null ? +(runRatePerHour * 24).toFixed(0) : null,
           realEvents: { ingestOk, ingestDedup, ingestFailed, ingestBadPayload: ingestBad, droppedTx: ingestFailed },
+          ext: { importedUsds: +toF(extImportedMu).toFixed(6), count: extCount, dedup: extDedup, bad: extBad }, // גל-109 · שער-הזרימות-החוץ
           byKind, rejected, errors, seq, lastH,
           throughput: { attempts: attemptsTotal, rejectedCount: rejected, acceptancePct: attemptsTotal > 0 ? +(((attemptsTotal - rejected) / attemptsTotal) * 100).toFixed(1) : null, governor: { nBase, cap: N_CAP, min: N_MIN, windowAcceptance: lastGovAcc } },
           supply: { saosTotal: SAOS_SUPPLY, saosStaked: toF([...balances.values()].reduce((a, b) => a + b.saosStaked, 0n)), usdsInPool: toF(pool.usds), saosInPool: toF(pool.saos) },
@@ -1076,6 +1131,7 @@ setInterval(sealAll, 10 * 60 * 1000);
 setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עלייה
 
 const bootResult = boot();
+ingestExtFlows(); // גל-109 · שער-הזרימות-החוץ: אחרי-boot (seenRefs-כבר-שוחזר → dedup-חוצה-דורות)
 setInterval(tick, TICK_MS);
 setInterval(snapshotSave, SNAP_MS);
 process.on("exit", () => { try { flush(); snapshotSave(); } catch {} });

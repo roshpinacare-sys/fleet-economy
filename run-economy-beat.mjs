@@ -134,7 +134,7 @@ const run = (cmd, args) => new Promise((res) => {
   let o = ""; c.stdout.on("data", (d) => (o += d)); c.stderr.on("data", (d) => (o += d));
   c.on("close", (code) => res({ code: code ?? 1, o }));
 });
-await run("git", ["add", "state/ledger.jsonl", "state/snapshot.json", "state/seal-log.jsonl", "state/writer-heartbeat.json"]);
+await run("git", ["add", "state/ledger.jsonl", "state/snapshot.json", "state/seal-log.jsonl", "state/writer-heartbeat.json", "state/ext-flows.jsonl"]); // גל-109 · ext-flows.jsonl נאטם (כותב-יחיד: console-API · הפעימה מאטימה בלבד)
 await run("git", ["commit", "-q", "-m", `[economy-beat] seq=${m?.seq ?? "?"} (+${delta}) · עוגנים=${anchors}/${ANCHOR_BASELINE} · מאומת-מול-הספר`]);
 let push = await run("git", ["push", "origin", "HEAD"]);
 if (push.code !== 0) {
