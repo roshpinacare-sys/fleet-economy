@@ -26,13 +26,14 @@ import path from "path";
 // fromF משחזר בדיוק ערכי-6-ספרות מהספר/הסנאפשוט (אפס-שכתוב-היסטוריה).
 // גל-87 · מיגרציית-יתרות: כל-היתרות (balances) והבריכה (pool) חיים-כ-BigInt µ¢
 // בזיכרון; הסידור (פנקס + snapshot) נשאר מספרי-6-ספרות זהה-בייטים — רצף-hash נשמר.
-import { fromF, toF, ammOut as muAmmOut, splitFee, type Mu } from "./lib/mu";
+import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, type Mu } from "./lib/mu";
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
 const LEDGER = path.join(STATE_DIR, "ledger.jsonl");
 const SNAP = path.join(STATE_DIR, "snapshot.json");
 const EXT_FLOWS = path.join(STATE_DIR, "ext-flows.jsonl"); // גל-109 · שער-הזרימות-החוץ (G27): כותב-יחיד=console-API · קורא=המנוע
+const EXT_POLICY = path.join(STATE_DIR, "ext-policy.json"); // גל-109·G28 · חוק-ניתוב-הנזילות: מדיניות-מוצהרת-בקנון (כותב-יחיד: הסוכן · המנוע קורא-ב-boot בלבד)
 const TICK_MS = 800; // גל-85: 900→800 (תקורה-זעירה — flush הוא append-בלבד)
 const SNAP_MS = 30_000;
 const FEE_BPS = 30; // 0.3%
@@ -124,7 +125,18 @@ let ingestOk = 0, ingestDedup = 0, ingestFailed = 0, ingestBad = 0;
  * (provenance: venue·txid·ref) — תוצאות-המסחר של סוכן-ה-HTX נקלטות בכספת-הריבונית
  * כ-ext-deposit חתום-בשרשרת. כותב-יחיד לקובץ: console-API (fail-closed על
  * .secrets/ext-flow.key) · המנוע קורא-בלבד ב-boot. אפס-סודות בספר או בקוד. */
-let extImportedMu = 0n, extCount = 0, extDedup = 0, extBad = 0;
+let extImportedMu = 0n, extPoolImportedMu = 0n, extCount = 0, extDedup = 0, extBad = 0; // גל-109·G28: extPoolImportedMu = מדידת-ניתוב-לבריכה
+/* גל-109·G28 · מדיניות-ניתוב: קריאה-ב-boot בלבד · fail-closed: קובץ-פגום/חסר = poolPct 0 (הכל-לכספת — התנהגות-G27) */
+let extPolicy = { poolPct: 0, maxFlowUsds: 25_000, dailyCapUsds: 50_000 };
+try {
+  const p = JSON.parse(fs.readFileSync(EXT_POLICY, "utf8"));
+  extPolicy = {
+    poolPct: Number.isFinite(p?.poolPct) && p.poolPct >= 0 && p.poolPct <= 100 ? Math.floor(Number(p.poolPct)) : 0,
+    maxFlowUsds: Number.isFinite(p?.maxFlowUsds) && p.maxFlowUsds > 0 ? Number(p.maxFlowUsds) : 25_000,
+    dailyCapUsds: Number.isFinite(p?.dailyCapUsds) && p.dailyCapUsds > 0 ? Number(p.dailyCapUsds) : 50_000,
+  };
+  console.log(`[fleet-economy] ext-policy G28: poolPct=${extPolicy.poolPct}% maxFlow=${extPolicy.maxFlowUsds} dailyCap=${extPolicy.dailyCapUsds}`);
+} catch { /* אין-מדיניות = ברירת-המחדל-הזהירה */ }
 const seenRefs = new Map<string, number>(); // ref → ts (דהיות: פקודות-כפולות של מפיקים לא נספרות פעמיים)
 const SEEN_REFS_CAP = 20_000;
 const SEEN_REFS_SNAP = 5_000; // כמה-refs-שורדים-ב-snapshot (האחרונים-ראשית — Map שומר-סדר-הכנסה)
@@ -219,6 +231,7 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
     // אין-חיוב-מקור-פנים — רק-זיכוי-יעד. חוק-איזון-כפול נאכף בשער (סכום-חיובי-סופי · ref-יחיד).
     if (t.ref) rememberRef(String(t.ref)); // dedup-מהמקור: כל-apply של-ext-deposit רושם-את-ה-ref
     (to as any)[field] += amtMu;
+    if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: מדידת-חלק-הניתוב-לבריכה
     extImportedMu += amtMu; extCount++;
     byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
     byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
@@ -440,6 +453,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
           // של-זנב-עם-ext-deposit תדדף-דרך-seenRefs — אפס-זיכוי-כפול).
           if (t.ref) rememberRef(String(t.ref));
           (to as any)[field] += amtMu;
+          if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: replay-משקף-apply מילה-במילה
           extImportedMu += amtMu; extCount++;
         } else if ((from as any)[field] < amtMu) { seamIdx = i; seamFile = f; break outer; } // מצב-לא-עקבי-עם-הספר → תפר-כנה
         else if (t.kind === "stake") { from.saos -= amtMu; from.saosStaked += amtMu; }
@@ -555,6 +569,7 @@ function boot() {
       ingestOk = s.ingestOk ?? 0; ingestDedup = s.ingestDedup ?? 0; ingestFailed = s.ingestFailed ?? 0; ingestBad = s.ingestBad ?? 0;
       // גל-109 · שער-הזרימות-החוץ: המדידות-שורדות-דורות
       extImportedMu = fromF(Number(s.extImported ?? 0)); extCount = s.extCount ?? 0; extDedup = s.extDedup ?? 0; extBad = s.extBad ?? 0;
+      extPoolImportedMu = fromF(Number(s.extPoolImported ?? 0)); // גל-109·G28: המדידה-שורדת-דורות
       // גל-87 · שימור-המדידה: attemptsTotal חייב לשרוד עלייה — בלי-זה acceptancePct מוצג
       // שלילי-מטופש (rejected היסטורי מול attempts צעירים). נמדד: -129163.1% אחרי-עלייה.
       if (typeof s.attemptsTotal === "number" && s.attemptsTotal > attemptsTotal) attemptsTotal = s.attemptsTotal;
@@ -670,17 +685,30 @@ function ingestExtFlows() {
     if (seenRefs.has(ref)) { dedup++; continue; }
     const note = typeof f?.note === "string" ? f.note.slice(0, 160) : "";
     const ts = Number(f?.ts);
-    const tx = apply({
-      seq: seq + 1, ts: Number.isFinite(ts) && ts > 0 ? ts : Date.now(),
-      kind: "ext-deposit", from: `ext:${venue}`, to: "treasury", asset: "USDS",
-      amount: Number(amt.toFixed(6)),
-      reason: `ייבוא-נזילות-חוץ · ${venue}${f?.kind ? " · " + String(f.kind).slice(0, 24) : ""}${note ? " · " + note : ""}`,
-      ref,
-    });
-    if (tx) { rememberRef(ref); ok++; } else bad++;
+    // גל-109·G28 · חוק-ניתוב-הנזילות: פיצול-µ¢ מדויק (lib/mu splitRouting · שימור-מוחלט)
+    // חלק-הבריכה מעמיק את השוק המסחרי SAOS/USDS (נזילות=תשואה) · היתר-לכספת-הריבונית.
+    const totalMu = fromF(Number(amt.toFixed(6)));
+    const { poolMu, treMu } = splitRouting(totalMu, extPolicy.poolPct);
+    const baseReason = `ייבוא-נזילות-חוץ · ${venue}${f?.kind ? " · " + String(f.kind).slice(0, 24) : ""}${note ? " · " + note : ""}`;
+    const parts: Array<{ to: string; mu: bigint; rowRef: string; tag: string }> = [];
+    if (treMu > 0n) parts.push({ to: "treasury", mu: treMu, rowRef: ref, tag: "כספת-ריבונית" });
+    if (poolMu > 0n) parts.push({ to: "pool", mu: poolMu, rowRef: `${ref}-pool`.slice(0, 80), tag: `בריכת-SAOS/USDS (${extPolicy.poolPct}%)` });
+    const tsFinal = Number.isFinite(ts) && ts > 0 ? ts : Date.now();
+    let landed = 0;
+    for (const part of parts) {
+      const tx = apply({
+        seq: seq + 1, ts: tsFinal,
+        kind: "ext-deposit", from: `ext:${venue}`, to: part.to, asset: "USDS",
+        amount: toF(part.mu),
+        reason: `${baseReason} · ניתוב-G28: ${part.tag}`,
+        ref: part.rowRef,
+      });
+      if (tx) { rememberRef(part.rowRef); landed++; } else bad++;
+    }
+    if (landed === parts.length && parts.length > 0) ok++; else if (parts.length === 0) bad++;
   }
-  extDedup += dedup; extBad += bad; // extImported/extCount-נמדדים-ב-apply בלבד (מקור-אמת-יחיד)
-  if (ok || dedup || bad) console.log(`[fleet-economy] ext-flows: ingested=${ok} dedup=${dedup} bad=${bad}`);
+  extDedup += dedup; extBad += bad; // extImported/extCount/extPoolImported-נמדדים-ב-apply בלבד (מקור-אמת-יחיד)
+  if (ok || dedup || bad) console.log(`[fleet-economy] ext-flows: ingested=${ok} dedup=${dedup} bad=${bad} routing=${extPolicy.poolPct}%pool`);
 }
 
 /* ── HTTP ─────────────────────────────────────────────────────────────────── */
@@ -695,7 +723,7 @@ function snapshotSave() {
     balances: Object.fromEntries([...balances].map(([k, v]) => [k, { usds: toF(v.usds), saos: toF(v.saos), saosStaked: toF(v.saosStaked) }])),
     pool: { saos: toF(pool.saos), usds: toF(pool.usds), feesUsds: toF(pool.feesUsds), feesSaos: toF(pool.feesSaos) },
     byKind, byAccount, rejected, errors, ledgerFileNo, ingestOk, ingestDedup, ingestFailed, ingestBad, attemptsTotal,
-    extImported: toF(extImportedMu), extCount, extDedup, extBad,
+    extImported: toF(extImportedMu), extPoolImported: toF(extPoolImportedMu), extCount, extDedup, extBad, // גל-109·G28: מדידת-ניתוב-שורדת-דורות
     seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
   const tmp = SNAP + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(obj));
@@ -721,7 +749,7 @@ const server = Bun.serve({
           ratePerHour: +(countsWindow(3_600_000)).toFixed(0), projectedPerDay: +(countsWindow(3_600_000) * 24).toFixed(0),
           runRatePerHour, runProjectedPerDay: runRatePerHour !== null ? +(runRatePerHour * 24).toFixed(0) : null,
           realEvents: { ingestOk, ingestDedup, ingestFailed, ingestBadPayload: ingestBad, droppedTx: ingestFailed },
-          ext: { importedUsds: +toF(extImportedMu).toFixed(6), count: extCount, dedup: extDedup, bad: extBad }, // גל-109 · שער-הזרימות-החוץ
+          ext: { importedUsds: +toF(extImportedMu).toFixed(6), poolImportedUsds: +toF(extPoolImportedMu).toFixed(6), routingPoolPct: extPolicy.poolPct, count: extCount, dedup: extDedup, bad: extBad }, // גל-109 · שער-הזרימות-החוץ + G28 ניתוב
           byKind, rejected, errors, seq, lastH,
           throughput: { attempts: attemptsTotal, rejectedCount: rejected, acceptancePct: attemptsTotal > 0 ? +(((attemptsTotal - rejected) / attemptsTotal) * 100).toFixed(1) : null, governor: { nBase, cap: N_CAP, min: N_MIN, windowAcceptance: lastGovAcc } },
           supply: { saosTotal: SAOS_SUPPLY, saosStaked: toF([...balances.values()].reduce((a, b) => a + b.saosStaked, 0n)), usdsInPool: toF(pool.usds), saosInPool: toF(pool.saos) },

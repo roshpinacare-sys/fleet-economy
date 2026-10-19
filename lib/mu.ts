@@ -84,3 +84,13 @@ export function ammOut(inR: Mu, outR: Mu, amountIn: Mu, feeBps: number): Mu {
   if (out > outR) return outR;
   return out;
 }
+
+/** G28 · גל-109 · פיצול-ניתוב-נזילות (חוק-ניתוב-הנזילות):
+ *  totalMu → { poolMu, treMu } כאשר poolMu = ⌊totalMu × pct / 100⌋.
+ *  שימור-מדויק-מוחלט: poolMu + treMu === totalMu (האבק-נשאר-בכספת).
+ *  fail-closed: pct שאינו-מספר-בטווח [0,100] = 0 (הכל-לכספת — אף-הפתעה-לא). */
+export function splitRouting(totalMu: Mu, pct: number): { poolMu: Mu; treMu: Mu } {
+  const p = Number.isFinite(pct) && pct >= 0 && pct <= 100 ? Math.floor(pct) : 0;
+  const poolMu = p > 0 ? (totalMu * BigInt(p)) / 100n : 0n;
+  return { poolMu, treMu: totalMu - poolMu };
+}

@@ -1,0 +1,10 @@
+{
+  "law": "G28 · חוק-ניתוב-הנזילות · agent-2 · 2026-10-19 · גל-109",
+  "poolPct": 25,
+  "maxFlowUsds": 25000,
+  "dailyCapUsds": 50000,
+  "routing": "ext-deposit → 25% בריכת-SAOS/USDS (העמקת-השוק-המסחרי) · 75% כספת-ריבונית",
+  "enforcedBy": "gate=console-API (maxFlow+dailyCap · 429) · engine=splitRouting µ¢-exact floor",
+  "failClosed": "pct-פגום=0 (הכל-לכספת) · קובץ-חסר=ברירות-המחדל-הזהירות",
+  "updatedAt": "2026-10-19T18:00:00Z"
+}
