@@ -1,42 +1,50 @@
 {
   "schema": "sovereign-builder-state/v1",
-  "createdAt": "2026-10-19T07:15:27.852Z",
+  "createdAt": "2026-10-18T22:30:36.240Z",
   "backlog": [],
-  "growthLogCount": 37,
-  "acts": 3,
-  "metrics": 13,
+  "growthLogCount": 73,
+  "acts": 19,
+  "metrics": 25,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 12,
+  "seals": 24,
   "sealFailures": 0,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-19T10:16:27.516Z",
+  "lastAt": "2026-10-19T10:26:12.562Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "ledger_stats": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-19T07:30:47.809Z",
-      "lastResult": "ok=True checked=168 seqFirst=1 seqLast=168",
-      "lastAt": "2026-10-19T07:30:47.809Z"
+      "lastOkAt": "2026-10-18T23:00:51.988Z",
+      "lastResult": "ok=True checked=167 seqFirst=1 seqLast=167",
+      "lastAt": "2026-10-18T23:00:51.988Z"
     },
     "price_report": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-19T07:45:50.948Z",
-      "lastResult": "ok=True seq=168 price=7.549717 fees=0.843494 treasuryUsds=1.207313",
-      "lastAt": "2026-10-19T07:45:50.948Z"
+      "lastOkAt": "2026-10-18T23:30:55.103Z",
+      "lastResult": "ok=True seq=167 price=7.549717 fees=0.843494 treasuryUsds=1.207314",
+      "lastAt": "2026-10-18T23:30:55.103Z"
     },
     "tools_selftest": {
       "runs": 1,
-      "ok": 0,
-      "fail": 1,
-      "lastOkAt": null,
-      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_s",
-      "lastAt": "2026-10-19T08:00:53.838Z"
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-19T00:00:58.712Z",
+      "lastResult": "ok=True tools=3 used=3",
+      "lastAt": "2026-10-19T00:00:58.712Z"
+    },
+    "verify_chain": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-19T00:31:01.839Z",
+      "lastResult": "ok=True checked=167 anchors=[]",
+      "lastAt": "2026-10-19T00:31:01.839Z"
     }
   }
 }
