@@ -297,6 +297,34 @@ function ensureClone() {
   } catch (e) { log(`clone-נכשל: ${String(e?.message ?? e).slice(0, 120)}`); return false; }
 }
 
+// גל-104: ריפוי-union של-קונפליקטים — רק-בקבצי-המצב-שלנו (append-only → איחוד-שורות-ללא-מחיקות;
+// .json → צד-הקנון-מנצח — נכתב-מחדש-בכל-איטום בכל-אופן). קונפליקט-מחוץ-לתיקיית-המצב → fail-closed-כנה.
+function unionHealStateConflicts() {
+  try {
+    const bad = git(["diff", "--name-only", "--diff-filter=U"]);
+    const files = bad.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (!files.length) return false;
+    const PREFIX = "bootstrap/sovereign-builder/state/";
+    for (const f of files) {
+      if (!f.startsWith(PREFIX)) return false;
+      const p = `${CLONE}/${f}`;
+      if (f.endsWith(".jsonl")) {
+        const lines = fs.readFileSync(p, "utf8").split("\n");
+        const seen = new Set(); const out = [];
+        for (const l of lines) { if (/^(<<<<<<<|=======$|>>>>>>>)/.test(l)) continue; if (!seen.has(l) || !l.trim()) { out.push(l); if (l.trim()) seen.add(l); } }
+        fs.writeFileSync(p, out.join("\n"));
+      } else {
+        git(["checkout", "--theirs", "--", f]); // .json-מצב: הקנון-מנצח
+      }
+      git(["add", "--", f]);
+    }
+    const rest = git(["diff", "--name-only", "--diff-filter=U"]);
+    if (rest) return false;
+    git(["commit", "-m", "builder-merge: union-ריפוי-מצב — אף-שורת-היסטוריה-לא-נמחקה (גל-104)"]);
+    return true;
+  } catch { return false; }
+}
+
 function seal() {
   if (!ensureClone()) return { ok: false, why: "אין-clone" };
   try {
@@ -312,12 +340,16 @@ function seal() {
       } else if (base === remote) {
         // הקנוני-מאחור מאיתנו (commit-מקומי שטרם-נדחף) — ממשיכים-לדחוף-FF
       } else {
-        // מפוצלים — merge-נקי בלבד (העבודה-שלנו: bootstrap/sovereign-builder/ — תיקייה-דיסקרטית)
+        // מפוצלים — merge-נקי; קונפליקט-בקבצי-מצב-שלנו → union-ריפוי (גל-104); אחרת → fail-closed
         try {
           git(["merge", "origin/main", "--no-edit", "-m", "builder-merge: אימוץ-קנוני (union-תיקייה-דיסקרטית)"]);
         } catch {
-          try { git(["merge", "--abort"]); } catch {}
-          return { ok: false, why: "מפוצל+קונפליקט — דחיית-איטום (fail-closed)" };
+          const healed = unionHealStateConflicts();
+          if (!healed) {
+            try { git(["merge", "--abort"]); } catch {}
+            return { ok: false, why: "מפוצל+קונפליקט-מחוץ-למצב — דחיית-איטום (fail-closed)" };
+          }
+          log("SEAL ⟳ union-ריפוי — קונפליקט-מצב-אוחד-ללא-מחיקות (גל-104)");
         }
       }
     }
@@ -349,6 +381,15 @@ function seal() {
 
 // ---------- פעימה ----------
 async function main() {
+  // גל-104: נעילת-פעימה — מונע-ריצות-מקבילות אם-יותר-ממארח-אחד מתזמן (חוק-נעילת-הסוופ).
+  // 90ש' בלבד: מכסה-פעימה-בריצה (עד-83ש' זרימה) מבלי-לדלג-על-טיקים-מתוזמנים-רגילים (5-דק').
+  const LOCK = "/home/z/audit/sovereign-builder/state/beat.lock";
+  try {
+    const age = Date.now() - (fs.existsSync(LOCK) ? fs.statSync(LOCK).mtimeMs : 0);
+    if (age < 90_000) { log(`פעימה-פעילה-כבר (lock גיל=${Math.round(age / 1000)}ש') — מדלג`); return; }
+    fs.mkdirSync("/home/z/audit/sovereign-builder/state", { recursive: true });
+    fs.writeFileSync(LOCK, String(process.pid));
+  } catch {}
   const t0 = Date.now();
   const state = loadState();
   log("פעימת-בנאי מתחילה");
