@@ -896,7 +896,9 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     const ahead = /ahead (\d+)/.exec(st.out)?.[1];
     const dirtyLines = st.out.split("\n").filter((l) => l && !l.startsWith("##"));
     if (dirtyLines.length > 0) {
-      await git(dir, ["add", "-A"]);
+      // 2026-10-19 (גל-109): תיקון-דליפה — aed7ceb הדליף את upload/htx.txt (מפתח-HTX של-הבעלים) דרך add -A
+      // שבולע-גם-קבצים-לא-נעקבים. מעתה: pathspec-exclude-קבוע — upload/ · tool-results/ · agent-ctx/ לעולם-לא-נאטמים.
+      await git(dir, ["add", "-A", "--", ":(exclude)upload", ":(exclude)upload/**", ":(exclude)tool-results", ":(exclude)tool-results/**", ":(exclude)agent-ctx", ":(exclude)agent-ctx/**"]);
       // גל-18 · דלתא-אטימה: קבצים-כבדים-מתחלפים (db/custom.db בינארי 40MB) לא-נאטמים-בכל-סבב
       // אלא-בקצב-דילוג (SEAL_DB_EVERY) — ה-blob-הרפוי-המלא-בכל-10-דק' היה-הדליפה-המבנית
       // (~300MB/שעה ל-.git, מוות-דיסק-בתוך-שעות). הספר-החי-והלדג'ר-נאטמים-תמיד.
