@@ -769,7 +769,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
         byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;
         // גל-115 · G36 · חוקי-המושל-נשחזרים-מהספר (סימטריית-apply/replay — החוק-חלק-מההיסטוריה)
-        if (t.kind === "policy") { applyGovLaw((t as any).policy); govLawFromBook = { law: govLawNow(), at: t.ts }; } // גל-116·G37: החוק-מהספר-בשחזור
+        if (t.kind === "policy") { applyGovLaw((t as any).policy); govLawFromBook = { law: govLawNow(), at: t.ts, src: "book" }; } // גל-116·G37: החוק-מהספר-בשחזור
         // גל-112 · G33 · replay-משקף-את-חלון-ההכנסה-מילה-במילה (חוק-הסימטריה)
         if (t.asset === "USDS" && t.to === "treasury" && (t.kind === "tax" || t.kind === "dex-fee" || t.kind === "dividend" || t.kind === "infra")) winFeed(incomeWin, t.ts, amtMu);
         seq = t.seq; lastH = h; prev = h; replayed++;
