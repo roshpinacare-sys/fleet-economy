@@ -60,6 +60,7 @@ export interface GovMeasure {
   incomeUsds1h: number;
   wageUsds1h: number;
   wageRows1h: number;
+  serviceUsds1h?: number; // גל-116·G37: מחזור-השירותים-בחלון — מדידת-המהירות (k)
   ts: number;
 }
 
@@ -92,6 +93,40 @@ export function closureOf(m: GovMeasure): number {
   return m.incomeUsds1h / m.wageUsds1h;
 }
 
+/* ═══ G37 · גל-116 · חוק-שווי-המשקל-המבני ═══
+ * המתמטיקה-הכנה (נמדדה-מהספר-החי):
+ *   סגירות = הכנסה/שכר = (מס×מחזור)/שכר = מס(t)×מהירות(k)  — שקול-מבנית.
+ *   k = מחזור-שירותים/שכר (כמה-פעמים-כל-דולר-שכר-מסתובב-בשעה).
+ *   מסקנה-קשה: אם-t מוגבל-חוקתית (≤5%), סגירות ≥0.9 דורשת k* = 0.9/t.
+ *   נמדד: t=3.5% · k≈6 → סגירות ≈0.21 — הפער-הוא **מהירות**, לא-רק-שכר.
+ *   קצב-בר-קיימא-מההכנסה-המדודה: sustainablePace = הכנסה/0.9 (השכר-שההכנסה-של-עכשיו
+ *   מממנת-ברמת-הסגירות-החוקתית) — המושל-חותר-אליו-במסגרת-החוקה, בלי-חריגת-צעד.
+ * ═══════════════════════════════════════════════ */
+
+/** מהירות-המחזור k = שירותים/שכר (null אם-אין-מדידת-שירותים — כנות-מלאה) */
+export function velocityOf(m: GovMeasure): number | null {
+  if (m.serviceUsds1h === undefined || m.wageUsds1h <= 0) return null;
+  return m.serviceUsds1h / m.wageUsds1h;
+}
+
+/** פירוק-מבני-של-הסגירות: איפה-הפער-באמת (מס מול מהירות) */
+export function closureDecompose(
+  m: GovMeasure,
+  p: GovPolicy,
+): { taxPct: number; velocity: number | null; closure: number; kStar: number | null } {
+  const closure = closureOf(m);
+  const velocity = velocityOf(m);
+  const taxPct = p.taxBps / 10_000;
+  const kStar = taxPct > 0 ? CONSTITUTION.closureLow / taxPct : null;
+  return { taxPct, velocity, closure, kStar };
+}
+
+/** קצב-בר-קיימא-מההכנסה-המדודה: הכנסה-של-עכשיו ÷ רמת-הסגירות-החוקתית, מהודק-לחוקה */
+export function sustainablePaceOf(m: GovMeasure): number {
+  const target = m.incomeUsds1h / CONSTITUTION.closureLow;
+  return Math.min(CONSTITUTION.floorMaxUsds, Math.max(CONSTITUTION.floorMinUsds, target));
+}
+
 const leverFree = (c: GovCooldowns, lever: GovLever, now: number): boolean =>
   (c.freezes[lever] ?? 0) <= now;
 
@@ -115,13 +150,22 @@ export function governorDecide(
   // ── מסלול-ההידוק: סגירות-נמוכה = שריפת-קרן ──
   if (Number.isFinite(closure) && closure < CONSTITUTION.closureLow) {
     // מנוף-1 · קצב: הורדת-רצפת-השכר (הפחתת-השריפה-במקור)
+    // G37: החתירה-מתוחשבת-ליעד — sustainablePace (הכנסה÷0.9) כשהוא-קרוב-מהצעד-החוקתי;
+    // הצעד-לעולם-לא-חורג-מהחוקה (−20% מקסימום) — רק-לא-יורד-מתחת-לשווי-המשקל-סתם.
     if (p.wageHourFloorUsds > CONSTITUTION.floorMinUsds && leverFree(c, "pace", now) && !leverCool(c, "pace", now)) {
-      let to = p.wageHourFloorUsds * (1 - CONSTITUTION.floorCutPct / 100);
+      const step = p.wageHourFloorUsds * (1 - CONSTITUTION.floorCutPct / 100);
+      const target = sustainablePaceOf(m);
+      let to = Math.max(target, step); // אל-היעד בלי לעבור את הצעד-החוקתי
       to = Math.max(CONSTITUTION.floorMinUsds, Math.round(to * 10) / 10);
+      to = Math.min(to, p.wageHourFloorUsds); // כיוון-ירידה-בלבד
       if (to < p.wageHourFloorUsds) {
+        const dec = closureDecompose(m, p);
+        const struct = dec.velocity !== null
+          ? `סגירות ${closure.toFixed(3)} = מס ${(dec.taxPct * 100).toFixed(2)}%×מהירות k=${dec.velocity.toFixed(1)} (שווי-משקל-דורש k*=${dec.kStar?.toFixed(1)}) — הפער-מבני: מהירות-ושכר-יחד`
+          : `סגירות ${closure.toFixed(3)} < 0.9 (הכנסה ${m.incomeUsds1h.toFixed(2)}$ מול שכר ${m.wageUsds1h.toFixed(2)}$/שעה)`;
         return {
           lever: "pace", field: "wageHourFloorUsds", from: p.wageHourFloorUsds, to, closure,
-          hypothesis: `סגירות ${closure.toFixed(3)} < 0.9 (הכנסה ${m.incomeUsds1h.toFixed(2)}$ מול שכר ${m.wageUsds1h.toFixed(2)}$/שעה) — הרצפת-הקודשת-קרן-כספת-בקצב-בלתי-נתמך. הורדת-הרצפת ${p.wageHourFloorUsds}→${to}$ מאטה-שריפה-ושומרת-התנעה (הגנת-לולאת-המוות: רצפת-מוחלטת ${CONSTITUTION.floorMinUsds}$)`,
+          hypothesis: `${struct} — קצב-בר-קיימא-מההכנסה-המדודה ≈ ${target.toFixed(1)}$ (הכנסה ${m.incomeUsds1h.toFixed(2)}$ ÷ 0.9) · הרצפה ${p.wageHourFloorUsds}→${to}$ בצעד-חוקתי (הגנת-לולאת-המוות: רצפת-מוחלטת ${CONSTITUTION.floorMinUsds}$)`,
           expect: { metric: "closure", direction: "up" },
         };
       }
@@ -155,7 +199,10 @@ export function governorDecide(
       ? true // אין-בסיס-השוואה-טרי — ההכרעה-נשענת-על-סגירות-בלבד
       : m.incomeUsds1h >= c.lastIncomeUsds * CONSTITUTION.growthIncomeFactor;
     if (!growthOk) return null;
-    let to = p.wageHourFloorUsds * (1 + CONSTITUTION.floorRaisePct / 100);
+    // G37: הצמיחה-גם-חותרת-ליעד — לא-מעל-שווי-המשקל-שההכנסה-תומכת (בלי-צעד-גדול-מהחוקה)
+    const step = p.wageHourFloorUsds * (1 + CONSTITUTION.floorRaisePct / 100);
+    const target = sustainablePaceOf(m);
+    let to = Math.min(step, target);
     to = Math.min(CONSTITUTION.floorMaxUsds, Math.round(to * 10) / 10);
     if (to > p.wageHourFloorUsds) {
       return {
