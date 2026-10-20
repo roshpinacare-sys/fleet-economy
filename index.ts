@@ -40,6 +40,7 @@ const FEE_BPS = 30; // 0.3%
 const WAGE_FLOOR_USDS = 350; // גל-83 · חוק-שכר-מצע: רצפת-פרנסה לחייל
 const TREASURY_FLOOR_USDS = 400; // גל-85 · משאבת-נזילות-כספת: מתחת-לזה הכספת מוכרת-SAOS לבריכה (עסקת-AMM אמת) כדי-שמשכורות-יזרמו
 const TAX_BPS = 200; // גל-83 · מס-שירותים 2% → הכספת (מימון-השכר)
+const SOV_POLICY = path.join(STATE_DIR, "sov-policy.json"); // גל-111 · G32 · חוק-הון-הריבון (מדיניות-מוצהרת-בקנון · המנוע קורא-ב-boot בלבד)
 
 /* ── משתמשי-הפנים ─────────────────────────────────────────────────────────── */
 type Account = { id: string; kind: "treasury" | "soldier" | "fleet" | "pool"; role: string };
@@ -126,6 +127,16 @@ let ingestOk = 0, ingestDedup = 0, ingestFailed = 0, ingestBad = 0;
  * כ-ext-deposit חתום-בשרשרת. כותב-יחיד לקובץ: console-API (fail-closed על
  * .secrets/ext-flow.key) · המנוע קורא-בלבד ב-boot. אפס-סודות בספר או בקוד. */
 let extImportedMu = 0n, extPoolImportedMu = 0n, extCount = 0, extDedup = 0, extBad = 0; // גל-109·G28: extPoolImportedMu = מדידת-ניתוב-לבריכה
+/* גל-111 · G32 · מדינת-אוצר-ריבונית — מונים-כנים-ששורדים-סנאפשוט-וסימטריים-ב-replay:
+ *  · incomeAccruedMu (G31): כל-הכנסת-האמת-ב-USDS (מס · dex-fee · איסוף-עמלות-בריכה · ext-כספת · דיבידנד)
+ *  · wagePaidMu (G31): שכר-ששולם-בפועל · wageBlocked: ניסיונות-שכר-שנחסמו-בכנות (אין-תקציב)
+ *  · דיבידנד-עמלות + איגרת-חוב-ריבונית (קרן/ריבית/החזר) — מימון-עצמי-מהון-הלאומי, אפס-הדפסה.
+ *  חיים-מרגע-ההטמעה (אפס-שכתוב-היסטוריה) — המקור-לתביעה: סריקת-הספר-המלאה בשער-הרווחיות. */
+let incomeAccruedMu = 0n, wagePaidMu = 0n, incomeSaosMu = 0n;
+let wageBlocked = 0;
+let dividendPaidMu = 0n, dividendRounds = 0;
+let bondIssuedMu = 0n, bondRepaidMu = 0n, bondInterestMu = 0n;
+let bondLastTs = 0;
 /* גל-109·G28 · מדיניות-ניתוב: קריאה-ב-boot בלבד · fail-closed: קובץ-פגום/חסר = poolPct 0 (הכל-לכספת — התנהגות-G27) */
 let extPolicy = { poolPct: 0, maxFlowUsds: 25_000, dailyCapUsds: 50_000 };
 try {
@@ -136,6 +147,24 @@ try {
     dailyCapUsds: Number.isFinite(p?.dailyCapUsds) && p.dailyCapUsds > 0 ? Number(p.dailyCapUsds) : 50_000,
   };
   console.log(`[fleet-economy] ext-policy G28: poolPct=${extPolicy.poolPct}% maxFlow=${extPolicy.maxFlowUsds} dailyCap=${extPolicy.dailyCapUsds}`);
+} catch { /* אין-מדיניות = ברירת-המחדל-הזהירה */ }
+/* גל-111 · G32 · חוק-הון-הריבון: קריאת-מדיניות-ב-boot בלבד · fail-closed: קובץ-פגום/חסר = איגרת-כבויה + דיבידנד-50% (התנהגות-בטוחה) */
+let sovPolicy = { feeToTreasuryPct: 50, treasuryRoundTicks: 150, bondEnabled: false, bondMaxUsds: 3_000, bondMaxPoolSharePct: 12, bondPerIssuanceUsds: 300, bondInterestBpsAnnual: 200, bondTriggerTreasuryUsds: 150, bondRepayRunwayUsds: 600 };
+try {
+  const p = JSON.parse(fs.readFileSync(SOV_POLICY, "utf8"));
+  const num = (v: unknown, lo: number, hi: number, dflt: number) => (Number.isFinite(v) && Number(v) >= lo && Number(v) <= hi ? Number(v) : dflt);
+  sovPolicy = {
+    feeToTreasuryPct: Math.floor(num(p?.feeToTreasuryPct, 0, 100, 50)),
+    treasuryRoundTicks: Math.max(10, Math.floor(num(p?.treasuryRoundTicks, 10, 10_000, 150))),
+    bondEnabled: p?.bondEnabled === true,
+    bondMaxUsds: num(p?.bondMaxUsds, 0, 50_000, 3_000),
+    bondMaxPoolSharePct: num(p?.bondMaxPoolSharePct, 0, 50, 12),
+    bondPerIssuanceUsds: num(p?.bondPerIssuanceUsds, 1, 10_000, 300),
+    bondInterestBpsAnnual: Math.floor(num(p?.bondInterestBpsAnnual, 0, 5_000, 200)),
+    bondTriggerTreasuryUsds: num(p?.bondTriggerTreasuryUsds, 0, 10_000, 150),
+    bondRepayRunwayUsds: num(p?.bondRepayRunwayUsds, 0, 10_000, 600),
+  };
+  console.log(`[fleet-economy] sov-policy G32: feeShare=${sovPolicy.feeToTreasuryPct}% round=${sovPolicy.treasuryRoundTicks}t bond=${sovPolicy.bondEnabled ? "ON" : "OFF"} max=${sovPolicy.bondMaxUsds}$ (${sovPolicy.bondMaxPoolSharePct}%pool) rate=${sovPolicy.bondInterestBpsAnnual / 100}%/y`);
 } catch { /* אין-מדיניות = ברירת-המחדל-הזהירה */ }
 const seenRefs = new Map<string, number>(); // ref → ts (דהיות: פקודות-כפולות של מפיקים לא נספרות פעמיים)
 const SEEN_REFS_CAP = 20_000;
@@ -149,10 +178,17 @@ function rememberRef(ref: string) {
   }
   seenRefs.set(ref, Date.now());
 }
+/* גל-111 · G32 · מאזן-התקציב-הריבוני (G31-מומש): הכנסה-אמת-שלא-נוצלה + קרן-איגרות-שטרם-הוחזרה − ריבית-ששולמה.
+ * חוב-ממומן-כנה: קרן-האיגרת מממנת-שכר (היא-הון-לאומי-שהועבר-לתפעול, לא-רווח); הריבית-היא-עלות-אמת-שחייבת-מהכנסה. */
+function wageBudgetMu(): bigint {
+  return incomeAccruedMu - wagePaidMu - bondInterestMu + (bondIssuedMu - bondRepaidMu);
+}
+function syncPoolAccounts() { bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; } // גל-111: חשבון-הבריכה-בספר-מסתנכרן-מול-המודול (אמת-ה-AMM)
 /* תדלוק-צף: חשבון-פנים שמשלם אגרות-אירוע לעולם לא נתקע — הכספת ממלאת אותו
  * ליעד-קטן (25-USDS) בעסקת-משכורת אמת בספר (מתועדת, נחתמת בשרשרת). */
 const FLOAT_TARGET = 25;
 function refillFloatIfEmpty(payer: string, needed: number): boolean {
+  if (wageBudgetMu() <= 0n) { wageBlocked++; return false; } // גל-111 · G31-מומש: אין-תקציב-אמת — אין-תדלוק-מהאוויר
   const needMu = fromF(needed);
   const b = bal(payer);
   if (b.usds >= needMu) return true;
@@ -232,6 +268,7 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
     if (t.ref) rememberRef(String(t.ref)); // dedup-מהמקור: כל-apply של-ext-deposit רושם-את-ה-ref
     (to as any)[field] += amtMu;
     if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: מדידת-חלק-הניתוב-לבריכה
+    if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; // גל-111·G31: ייבוא-לכספת = הכנסת-אמת
     extImportedMu += amtMu; extCount++;
     byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
     byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
