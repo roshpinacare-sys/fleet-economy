@@ -419,7 +419,7 @@ function spawnTx(): Tx | null {
     const others = ACCOUNTS.filter((a) => a.id !== soldier && a.kind !== "pool" && a.id !== "treasury" && a.id !== "boot-verifier");
     const to = pick(others).id;
     const svc = pick(SERVICES);
-    const units = 1 + Math.floor(Math.random() * 2); // גל-114·G35: יחידות-מרוסנות (היה-1–8 = חשבונות-עד-25.6$ מול-ארנקי-דאסט)
+    const units = Math.random() < 0.8 ? 1 : 2; // גל-114·G35: משקול-ליחידה-אחת — התאמת-ארנקים (היה-1–8 אחיד)
     // גל-83 · זרימה-חוזרת: צמתי-הצי קונים-שירותים מהחיילים
     // גל-85 · משלם-משוקלל-עושר: חלק-הצמתים-בתשלום נגזר-מחלקתם-בהון-המחזורי בפועל
     // (מי-שצבר-תשתית משלם-יותר — הכסף-לא-נתקע-אצל-אף-אחד; חלון-מוגן 20%-50%)
