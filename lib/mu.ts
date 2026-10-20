@@ -94,3 +94,19 @@ export function splitRouting(totalMu: Mu, pct: number): { poolMu: Mu; treMu: Mu 
   const poolMu = p > 0 ? (totalMu * BigInt(p)) / 100n : 0n;
   return { poolMu, treMu: totalMu - poolMu };
 }
+
+/** G33 · גל-112 · חוק-קצב-ההוצאה — המכסה-השעתית-הטהורה (µ¢):
+ *  cap = min(⌊budget ÷ runway⌋, max(floor, ⌊income1h × pct ÷ 100⌋)).
+ *  השכר-אינו-יכול-לשרוף-מהר-יותר-מהתקציב-מחזיק-מעמד (runway שעות) ואינו-עולה-על-חלק-מהכנסה-האמת-השעתית,
+ *  עם-רצפת-חיים-מינימלית (נצנוץ-פעילות-גם-באפס-הכנסה). fail-closed: budget ≤ 0 → 0.
+ *  הממצא-המדוד שסגר-את-החוק: שכר 3,341$ מול הכנסה 341$ — כל-תקציב-שנצבר התאדה-תוך-שעה. */
+export function wagePaceCapMu(budgetMu: bigint, income1hMu: bigint, runwayH: number, pct: number, floorMu: bigint): bigint {
+  if (budgetMu <= 0n) return 0n;
+  const h = Math.max(1, Math.round(Number.isFinite(runwayH) ? runwayH : 8));
+  const byRunway = budgetMu / BigInt(h);
+  const p = Number.isFinite(pct) ? Math.max(0, Math.min(100, Math.round(pct))) : 0;
+  const byIncome = (income1hMu * BigInt(p)) / 100n;
+  const f = floorMu > 0n ? floorMu : 0n;
+  const incomeCap = byIncome > f ? byIncome : f;
+  return byRunway < incomeCap ? byRunway : incomeCap;
+}

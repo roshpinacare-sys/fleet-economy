@@ -26,7 +26,7 @@ import path from "path";
 // fromF משחזר בדיוק ערכי-6-ספרות מהספר/הסנאפשוט (אפס-שכתוב-היסטוריה).
 // גל-87 · מיגרציית-יתרות: כל-היתרות (balances) והבריכה (pool) חיים-כ-BigInt µ¢
 // בזיכרון; הסידור (פנקס + snapshot) נשאר מספרי-6-ספרות זהה-בייטים — רצף-hash נשמר.
-import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, type Mu } from "./lib/mu";
+import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, wagePaceCapMu, type Mu } from "./lib/mu";
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
@@ -40,7 +40,7 @@ const FEE_BPS = 30; // 0.3%
 const WAGE_FLOOR_USDS = 350; // גל-83 · חוק-שכר-מצע: רצפת-פרנסה לחייל
 const TREASURY_FLOOR_USDS = 400; // גל-85 · משאבת-נזילות-כספת: מתחת-לזה הכספת מוכרת-SAOS לבריכה (עסקת-AMM אמת) כדי-שמשכורות-יזרמו
 const RUNWAY_CYCLES = 600; // גל-111 · G32 · משמעת-תזרים-השכר: תקציב-חייב-להספיק-לפחות ל-600 מחזורי-מצע (כל-מחזור = 12 טיקים ≈ 9.6ש')
-const TAX_BPS = 200; // גל-83 · מס-שירותים 2% → הכספת (מימון-השכר)
+const TAX_BPS = 250; // גל-112 · G33 · מס-שירותים 2.5% → הכספת (מ-2% — העלאה-מדודה: נמדד-אידוי-98.5% משכר-שלא-חוזר-כהכנסה)
 const SOV_POLICY = path.join(STATE_DIR, "sov-policy.json"); // גל-111 · G32 · חוק-הון-הריבון (מדיניות-מוצהרת-בקנון · המנוע קורא-ב-boot בלבד)
 
 /* ── משתמשי-הפנים ─────────────────────────────────────────────────────────── */
@@ -150,7 +150,7 @@ try {
   console.log(`[fleet-economy] ext-policy G28: poolPct=${extPolicy.poolPct}% maxFlow=${extPolicy.maxFlowUsds} dailyCap=${extPolicy.dailyCapUsds}`);
 } catch { /* אין-מדיניות = ברירת-המחדל-הזהירה */ }
 /* גל-111 · G32 · חוק-הון-הריבון: קריאת-מדיניות-ב-boot בלבד · fail-closed: קובץ-פגום/חסר = איגרת-כבויה + דיבידנד-50% (התנהגות-בטוחה) */
-let sovPolicy = { feeToTreasuryPct: 50, treasuryRoundTicks: 150, bondEnabled: false, bondMaxUsds: 3_000, bondMaxPoolSharePct: 12, bondPerIssuanceUsds: 300, bondInterestBpsAnnual: 200, bondTriggerTreasuryUsds: 150, bondRepayRunwayUsds: 600 };
+let sovPolicy = { feeToTreasuryPct: 50, treasuryRoundTicks: 150, bondEnabled: false, bondMaxUsds: 3_000, bondMaxPoolSharePct: 12, bondPerIssuanceUsds: 300, bondInterestBpsAnnual: 200, bondTriggerTreasuryUsds: 150, bondRepayRunwayUsds: 600, wageRunwayHours: 8, wagePctOfIncome: 80, wageHourFloorUsds: 1 };
 try {
   const p = JSON.parse(fs.readFileSync(SOV_POLICY, "utf8"));
   const num = (v: unknown, lo: number, hi: number, dflt: number) => (Number.isFinite(v) && Number(v) >= lo && Number(v) <= hi ? Number(v) : dflt);
@@ -164,8 +164,11 @@ try {
     bondInterestBpsAnnual: Math.floor(num(p?.bondInterestBpsAnnual, 0, 5_000, 200)),
     bondTriggerTreasuryUsds: num(p?.bondTriggerTreasuryUsds, 0, 10_000, 150),
     bondRepayRunwayUsds: num(p?.bondRepayRunwayUsds, 0, 10_000, 600),
+    wageRunwayHours: num(p?.wageRunwayHours, 1, 720, 8), // גל-112 · G33: חוק-קצב-ההוצאה
+    wagePctOfIncome: num(p?.wagePctOfIncome, 0, 100, 80), // השכר-השעתי-מכוסה-הכנסה-אמת
+    wageHourFloorUsds: num(p?.wageHourFloorUsds, 0, 100, 1), // רצפת-חיים — נצנוץ-פעילות-גם-באפס-הכנסה
   };
-  console.log(`[fleet-economy] sov-policy G32: feeShare=${sovPolicy.feeToTreasuryPct}% round=${sovPolicy.treasuryRoundTicks}t bond=${sovPolicy.bondEnabled ? "ON" : "OFF"} max=${sovPolicy.bondMaxUsds}$ (${sovPolicy.bondMaxPoolSharePct}%pool) rate=${sovPolicy.bondInterestBpsAnnual / 100}%/y`);
+  console.log(`[fleet-economy] sov-policy G33: feeShare=${sovPolicy.feeToTreasuryPct}% round=${sovPolicy.treasuryRoundTicks}t bond=${sovPolicy.bondEnabled ? "ON" : "OFF"} max=${sovPolicy.bondMaxUsds}$ (${sovPolicy.bondMaxPoolSharePct}%pool) rate=${sovPolicy.bondInterestBpsAnnual / 100}%/y pace=runway${sovPolicy.wageRunwayHours}h×income${sovPolicy.wagePctOfIncome}%·floor${sovPolicy.wageHourFloorUsds}$`);
 } catch { /* אין-מדיניות = ברירת-המחדל-הזהירה */ }
 const seenRefs = new Map<string, number>(); // ref → ts (דהיות: פקודות-כפולות של מפיקים לא נספרות פעמיים)
 const SEEN_REFS_CAP = 20_000;
@@ -184,6 +187,38 @@ function rememberRef(ref: string) {
 function wageBudgetMu(): bigint {
   return incomeAccruedMu - wagePaidMu - bondInterestMu + (bondIssuedMu - bondRepaidMu);
 }
+/* גל-112 · G33 · חוק-קצב-ההוצאה — הממצא-המדוד שסגר-את-הגל: שכר 3,341$ מול הכנסה 341$ (10:1)
+ * והאיגרת (3,000$) נשרפה-תוך-שעה-פחות-או-פחות: כל-תקציב-שנצבר התאדה-מיד-בשכר-אקראי
+ * (6% מ-10,658-tx/שעה × ~5$ ≈ 3,200$/שעה) — בלי-שום-קשר-בין-קצב-השריפה-לקצב-ההכנסה.
+ * החוק: מכסת-שכר-שעתית = min(תקציב÷runway-שעות, max(רצפת-חיים, הכנסה-אמת-שעתית×pct)) − שנוצל-השעה.
+ * החלונות-ניזונים-מהספר-עצמו (apply+replay סימטריים — חוק-הסימטריה) — אחרי-הפעלה-מחדש
+ * החלונות-מתחילים-ריקים (ה-replay מכסה-רק-את-זנב-שאחרי-הסנאפשוט) → קצב-שמרני-כנה עד-שהמציאות-נמדדת-שוב. */
+const wageWin: { ts: number; mu: bigint }[] = [];   // שכר-שהתבצע-מהכספת (salary·USDS)
+const incomeWin: { ts: number; mu: bigint }[] = []; // הכנסה-אמת-לכספת (tax/dex-fee/dividend/infra/ext-deposit·USDS)
+const WIN_MS = 60 * 60_000;
+function winFeed(win: { ts: number; mu: bigint }[], ts: number, mu: bigint) { win.push({ ts, mu }); if (win.length > 50_000) win.splice(0, 10_000); } // סף-בטיחות-זיכרון
+function winSum(win: { ts: number; mu: bigint }[]): bigint {
+  const cut = Date.now() - WIN_MS;
+  while (win.length && win[0].ts < cut) win.shift();
+  let s = 0n; for (const e of win) s += e.mu;
+  return s;
+}
+function wageSpendLastHourMu(): bigint { return winSum(wageWin); }
+function incomeLastHourMu(): bigint { return winSum(incomeWin); }
+/* נותר-ממכסת-הקצב-השעתית. 0 = חסום-בכנות (אין-תקציב או שהמכסה-נוצלה).
+ * המכסה-עצמה = חוק-טהור-יחיד wagePaceCapMu ב-lib/mu.ts (מקור-אמת-יחיד · ננעל-בטסטים). */
+function wagePaceRemainingMu(): bigint {
+  const cap = wagePaceCapMu(
+    wageBudgetMu(),
+    incomeLastHourMu(),
+    Number(sovPolicy.wageRunwayHours),
+    Number(sovPolicy.wagePctOfIncome),
+    fromF(Math.max(0, Number(sovPolicy.wageHourFloorUsds) || 0)),
+  );
+  if (cap <= 0n) return 0n;
+  const spent = wageSpendLastHourMu();
+  return cap > spent ? cap - spent : 0n;
+}
 function syncPoolAccounts() { bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; } // גל-111: חשבון-הבריכה-בספר-מסתנכרן-מול-המודול (אמת-ה-AMM)
 /* תדלוק-צף: חשבון-פנים שמשלם אגרות-אירוע לעולם לא נתקע — הכספת ממלאת אותו
  * ליעד-קטן (25-USDS) בעסקת-משכורת אמת בספר (מתועדת, נחתמת בשרשרת). */
@@ -193,8 +228,13 @@ function refillFloatIfEmpty(payer: string, needed: number): boolean {
   const needMu = fromF(needed);
   const b = bal(payer);
   if (b.usds >= needMu) return true;
-  const fillMu = fromF(FLOAT_TARGET) - b.usds;
-  if (fillMu <= 0n) return b.usds >= needMu;
+  const fillMu0 = fromF(FLOAT_TARGET) - b.usds;
+  if (fillMu0 <= 0n) return b.usds >= needMu;
+  // גל-112 · G33: המילוי-נכלל-בקצב-השעה-ואינו-עולה-עליו — נמדד: מילוי-מלא-עד-יעד-25$ עם-תקציב-זעיר
+  // דחף-את-התקציב-לשלילי. אם-הקצב-אינו-מכסה-אפילו-את-האגרה-הנדרשת — נכשל-בכנות (האירוע-לא-מובלע).
+  const remainMu = wagePaceRemainingMu();
+  const fillMu = fillMu0 < remainMu ? fillMu0 : remainMu;
+  if (b.usds + fillMu < needMu) { wageBlocked++; return false; }
   const fill = toF(fillMu);
   const r = apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: payer, asset: "USDS", amount: fill, reason: `תדלוק-צף-אגרות-אירועים (${payer})` });
   return r !== null && bal(payer).usds >= needMu;
@@ -269,7 +309,7 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
     if (t.ref) rememberRef(String(t.ref)); // dedup-מהמקור: כל-apply של-ext-deposit רושם-את-ה-ref
     (to as any)[field] += amtMu;
     if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: מדידת-חלק-הניתוב-לבריכה
-    if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; // גל-111·G31: ייבוא-לכספת = הכנסת-אמת
+    if (t.to === "treasury" && t.asset === "USDS") { incomeAccruedMu += amtMu; winFeed(incomeWin, t.ts, amtMu); } // גל-111·G31: ייבוא-לכספת = הכנסת-אמת · גל-112·G33: חלון-קצב
     extImportedMu += amtMu; extCount++;
     byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
     byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
@@ -306,8 +346,10 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   else if (t.kind === "bond-issue") bondIssuedMu += amtMu;
   else if (t.kind === "bond-repay") bondRepaidMu += amtMu;
   else if (t.kind === "bond-interest") bondInterestMu += amtMu;
-  else if (t.kind === "salary") wagePaidMu += amtMu;
+  else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: חלון-הקצב-ניזון-מהספר-עצמו
   else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") incomeAccruedMu += amtMu; else incomeSaosMu += amtMu; } // איסוף-עמלות-בריכה
+  // גל-112 · G33 · חלון-הכנסה-אמת-השעתית (מקור-יחיד = הספר; ext-deposit-ניזון-בענף-שלו)
+  if (t.asset === "USDS" && t.to === "treasury" && (t.kind === "tax" || t.kind === "dex-fee" || t.kind === "dividend" || t.kind === "infra")) winFeed(incomeWin, t.ts, amtMu);
   byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
   byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
   const signed = sealTx(t);
@@ -353,10 +395,14 @@ const round6 = (x: number) => +x.toFixed(6);
 function spawnTx(): Tx | null {
   const r = Math.random();
   const soldier = pick(SOLDIERS).id;
-  if (r < 0.06) { // משכורת/תדלוק מהכספת (מנוזל, מההצע-הקבוע בלבד · G31-מומש: רק-מתקציב-אמת, מוגבל-לתקציב-בדיוק)
-    const budgetMu = wageBudgetMu();
-    if (budgetMu <= 0n) { wageBlocked++; rej(); return null; }
-    const amt = Math.max(0.01, Math.min(round6(2 + Math.random() * 6), +toF(budgetMu).toFixed(6))); // גל-111: אפס-חריגה-מהתקציב (נמדד: עודף-4.6$-נתפס-ותוקן)
+  if (r < 0.06) { // משכורת/תדלוק מהכספת (מנוזל, מההצע-הקבוע בלבד · G31-מומש + G33-קצב-הוצאה)
+    // גל-112 · G33 · חוק-קצב-ההוצאה: השכר-ניזון-לפי-מכסה-שעתית (runway·הכנסה·רצפת) — נמדד:
+    // המוקדם שרף-שכר-אקראי 3,341$-מול-הכנסה-341$ ושרף-איגרת-שלמה-תוך-שעה; וכן Math.max(0.01,…)
+    // כפה-שכר-מינימלי-גם-עם-תקציב-0.004$ → תקציב-שלילי. שניהם-נסגרים: אין-מכסה-שעתית=חסום-בכנות.
+    const remainMu = wagePaceRemainingMu();
+    if (remainMu < fromF(0.01)) { wageBlocked++; rej(); return null; }
+    const amt = Math.min(round6(2 + Math.random() * 6), +toF(remainMu).toFixed(6)); // חיתוך-מדויק-למכסה-שנותרה — אפס-חריגה
+    if (amt < 0.01) { wageBlocked++; rej(); return null; }
     return apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: soldier, asset: "USDS", amount: amt, reason: "משכורת-מחזורית על עבודת-שורה חיה" });
   }
   if (r < 0.50) { // תשלום-שירות הדדי — עיקר-הזרימה (משתמשי-פנים משלמים זה לזה)
@@ -427,14 +473,16 @@ function tick() {
       // גל-111 · משמעת-תזרים: התקציב-מתוכנן-להספיק-לפחות ל-RUNWAY_CYCLES מחזורי-מצע (~96 דק')
       // — נמדד: בלעדיו החוק-שרף-300$/9.6ש' ורוקן-איגרת-שלמה-בדקות (65:1-היסטורי-חוזר).
       const perSoldierCap = budget / BigInt(RUNWAY_CYCLES);
+      let paceLeft = wagePaceRemainingMu(); // גל-112 · G33: המצע-חולק-את-מכסת-הקצב-השעתית-עם-השכר-האקראי (מקור-אמת-יחיד)
       for (const s of poor) {
-        if (budget <= 0n) { wageBlocked++; continue; }
+        if (budget <= 0n || paceLeft < fromF(0.01)) { wageBlocked++; continue; }
         const wantMu = fromF(round6(30 + Math.random() * 45));
         let amtMu = wantMu > budget ? budget : wantMu;
         if (amtMu > perSoldierCap) amtMu = perSoldierCap; // משמעת-ה-runway
+        if (amtMu > paceLeft) amtMu = paceLeft; // גל-112 · G33: מהמכסה-השעתית-שנותרה
         if (amtMu < fromF(0.01)) { wageBlocked++; continue; }
         const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: s.id, asset: "USDS", amount: toF(amtMu), reason: `חוק-שכר-מצע (G31-מומש): תדלוק-פרנסה-מתקציב-אמת (רצפת ${WAGE_FLOOR_USDS})` });
-        if (tx) budget -= amtMu; else wageBlocked++;
+        if (tx) { budget -= amtMu; paceLeft -= amtMu; } else wageBlocked++;
       }
     }
     // גל-85 · משאבת-נזילות-כספת (הזרימה-הסגורה שנעדרה): נמדד בפורנזיה 2026-10-17 —
@@ -598,10 +646,12 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         else if (t.kind === "bond-repay") { pool.usds += amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondRepaidMu += amtMu; }
         else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") { pool.usds -= amtMu; incomeAccruedMu += amtMu; } else { pool.saos -= amtMu; incomeSaosMu += amtMu; } bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
         else if (t.kind === "tax" || t.kind === "dex-fee") { if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; }
-        else if (t.kind === "salary") wagePaidMu += amtMu;
+        else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: סימטריית-replay-מלאה
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
         byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
         byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;
+        // גל-112 · G33 · replay-משקף-את-חלון-ההכנסה-מילה-במילה (חוק-הסימטריה)
+        if (t.asset === "USDS" && t.to === "treasury" && (t.kind === "tax" || t.kind === "dex-fee" || t.kind === "dividend" || t.kind === "infra")) winFeed(incomeWin, t.ts, amtMu);
         seq = t.seq; lastH = h; prev = h; replayed++;
       }
     }
@@ -890,7 +940,9 @@ const server = Bun.serve({
           realEvents: { ingestOk, ingestDedup, ingestFailed, ingestBadPayload: ingestBad, droppedTx: ingestFailed },
           ext: { importedUsds: +toF(extImportedMu).toFixed(6), poolImportedUsds: +toF(extPoolImportedMu).toFixed(6), routingPoolPct: extPolicy.poolPct, count: extCount, dedup: extDedup, bad: extBad }, // גל-109 · שער-הזרימות-החוץ + G28 ניתוב
           sov: { // גל-111 · G32 · מדינת-האוצר-הריבונית (G31-מומש)
-            law: "G32-חוק-הון-הריבון", wageBudgetUsds: +toF(wageBudgetMu()).toFixed(4),
+            law: "G32-חוק-הון-הריבון · G33-קצב-ההוצאה", wageBudgetUsds: +toF(wageBudgetMu()).toFixed(4),
+            wageSpend1hUsds: +toF(wageSpendLastHourMu()).toFixed(4), income1hUsds: +toF(incomeLastHourMu()).toFixed(4), // גל-112·G33: מדידת-הקצב-חיה
+            wagePaceRemainingUsds: +toF(wagePaceRemainingMu()).toFixed(4), wageRunwayHours: sovPolicy.wageRunwayHours, wagePctOfIncome: sovPolicy.wagePctOfIncome,
             incomeAccruedUsds: +toF(incomeAccruedMu).toFixed(4), incomeSaos: +toF(incomeSaosMu).toFixed(4), wagePaidUsds: +toF(wagePaidMu).toFixed(4), wageBlocked,
             dividend: { paidUsds: +toF(dividendPaidMu).toFixed(4), rounds: dividendRounds, feeSharePct: sovPolicy.feeToTreasuryPct },
             bond: { enabled: sovPolicy.bondEnabled, issuedUsds: +toF(bondIssuedMu).toFixed(4), repaidUsds: +toF(bondRepaidMu).toFixed(4), interestUsds: +toF(bondInterestMu).toFixed(4), outstandingUsds: +toF(bondIssuedMu - bondRepaidMu).toFixed(4), annualBps: sovPolicy.bondInterestBpsAnnual, maxUsds: sovPolicy.bondMaxUsds, maxPoolSharePct: sovPolicy.bondMaxPoolSharePct },
