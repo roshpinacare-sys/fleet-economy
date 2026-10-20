@@ -895,6 +895,22 @@ function capitalReallocation() {
   return { moved: tx ? amt : 0 };
 }
 
+/* גל-114·G35 · הקצאת-הון-עובד-חד-פעמית: פיזיקת-המהירות נמדדה — כל-חייל-מנסה-שירות-כל-~1.2ש',
+ * ארנק-שמגיע-ל-0.35 משלם-מיד ⇒ מלאי-עומד-אפס ⇒ דחיות-מחיר-מתמדות-ומווסת-חנוק-במינימום.
+ * החוק: הכספת-מקצה-5$-הון-עובד-לכל-אחד-מ-12-חשבונות-המשתמשים (60$-מתוך-54K — מימון-מהון-הריבון,
+ * G32) כדי-שהשוק-ידשדש-בעומק. חד-פעמית-ואידמפוטנטית (ref-guard). */
+function workingCapitalBootstrap() {
+  if (seenRefs.has("g35-working-capital-v1")) return { allocated: 0 };
+  let total = 0;
+  for (const acct of [...SOLDIERS.map((s) => s.id), ...PAY_NODES.map((n) => n.id)]) {
+    if (bal(acct).usds >= fromF(5)) continue;
+    const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "capital-reallocation", from: "treasury", to: acct, asset: "USDS", amount: 5, reason: "הקצאת-הון-עובד-להתנעת-השוק-הפנימי (G35 · חוק-הון-הריבון G32 · חד-פעמי)", ref: `g35-working-capital-v1-${acct}` });
+    if (tx) total += 5;
+  }
+  if (total > 0) { rememberRef("g35-working-capital-v1"); console.log(`[fleet-economy] G35-working-capital: ${total} USDS הוקצו ל-12 חשבונות`); }
+  return { allocated: total };
+}
+
 /* הסגר-כנה של-קבצי-מדינה — אפס-תפירה-מזויפת, כל-ההיסטוריה-נשמרת-לביקורת */
 function quarantineState(reason: string) {
   const q = path.join(STATE_DIR, "quarantine");
@@ -1450,6 +1466,7 @@ setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עליי
 const bootResult = boot();
 const g35Reconcile = genesisReconcile(); // גל-114·G35: שלמות-הספר-לפני-כל-זרימה
 const g35Capital = capitalReallocation(); // גל-114·G35: הון-עצל→מחזור
+const g35Working = workingCapitalBootstrap(); // גל-114·G35: הון-עובד-להתנעת-השוק
 ingestExtFlows(); // גל-109 · שער-הזרימות-החוץ: אחרי-boot (seenRefs-כבר-שוחזר → dedup-חוצה-דורות)
 setInterval(tick, TICK_MS);
 setInterval(snapshotSave, SNAP_MS);
