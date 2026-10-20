@@ -189,6 +189,8 @@ let govCooldowns: GovCooldowns = emptyCooldowns();
 type GovPending = { ref: string; lever: GovLever; field: string; from: number; to: number; closure0: number; ts: number; checkAt: number };
 let govPending: GovPending[] = [];
 let govStats = { decisions: 0, verified: 0, failed: 0, freezes: 0, lastDecisionAt: 0, lastReportAt: 0, lastNetWorthUsds: null as number | null };
+/* גל-116·G37: החוק-האחרון-שנחתם-בספר (שורת-policy) — בסיס-טענת-החוק-הוא-הספר */
+let govLawFromBook: { law: GovPolicy; at: number } | null = null;
 /* אכילת-חוק מהספר/הסנאפשוט — מופעלת-גם-חי-וגם-ב-replay (סימטריית-apply/replay · חוק-הסימטריה) */
 function applyGovLaw(law: Partial<GovPolicy> | null | undefined) {
   if (!law) return;
@@ -199,7 +201,7 @@ function applyGovLaw(law: Partial<GovPolicy> | null | undefined) {
 }
 const govLawNow = (): GovPolicy => ({ wageHourFloorUsds: sovPolicy.wageHourFloorUsds, taxBps, feeToTreasuryPct: sovPolicy.feeToTreasuryPct });
 function winCount(win: { ts: number; mu: bigint }[]): number { const cut = Date.now() - WIN_MS; let c = 0; for (const e of win) if (e.ts >= cut) c++; return c; }
-function govMeasure(): GovMeasure { return { incomeUsds1h: toF(incomeLastHourMu()), wageUsds1h: toF(wageSpendLastHourMu()), wageRows1h: winCount(wageWin), ts: Date.now() }; }
+function govMeasure(): GovMeasure { return { incomeUsds1h: toF(incomeLastHourMu()), wageUsds1h: toF(wageSpendLastHourMu()), wageRows1h: winCount(wageWin), serviceUsds1h: toF(serviceLastHourMu()), ts: Date.now() }; }
 
 /* פסקי-דין: החלטות-שעבר-בדיקתן — המדידה-בפועל-מול-הצפוי · 3-כישלונות-רצופים → הקפאת-המנוף-6ש' */
 function governorOutcomes(now: number) {
@@ -235,6 +237,7 @@ function governorLegislate(now: number) {
   // שורת-החוק: החוק-החדש-כחלק-מהספר — נשחזר-דטרמיניסטית-בכל-boot
   apply({ seq: seq + 1, ts: now, kind: "policy", from: "treasury", to: "treasury", asset: "USDS", amount: 0, reason: `חוק-G36-המושל-הריבוני: ${d.field} ${d.from}→${d.to} (מנוף-${d.lever} · סגירות-${d.closure.toFixed(3)})`, ref, policy: law } as any);
   applyGovLaw(law);
+  govLawFromBook = { law: govLawNow(), at: now }; // גל-116·G37: החוק-הכתוב-בספר (טענת-/claims)
   // רשומת-ההחלטה: המדידה · ההשערה · התוצאה-הצפויה · מועד-הבדיקה (חשיבה-בדוקה-מתועדת)
   const decRef = `${ref}-dec`;
   apply({ seq: seq + 1, ts: now, kind: "govern", from: "treasury", to: "treasury", asset: "USDS", amount: 0, reason: `החלטה-ריבונית-עצמאית (${d.lever}): ${d.field} ${d.from}→${d.to} — ${d.hypothesis}`, ref: decRef, gov: { lever: d.lever, field: d.field, from: d.from, to: d.to, closure0: +d.closure.toFixed(6), hypothesis: d.hypothesis, expect: d.expect, checkAt: now + CONSTITUTION.checkMs } } as any);
@@ -298,6 +301,8 @@ function wageBudgetMu(): bigint {
  * החלונות-מתחילים-ריקים (ה-replay מכסה-רק-את-זנב-שאחרי-הסנאפשוט) → קצב-שמרני-כנה עד-שהמציאות-נמדדת-שוב. */
 const wageWin: { ts: number; mu: bigint }[] = [];   // שכר-שהתבצע-מהכספת (salary·USDS)
 const incomeWin: { ts: number; mu: bigint }[] = []; // הכנסה-אמת-לכספת (tax/dex-fee/dividend/infra/ext-deposit·USDS)
+const serviceWin: { ts: number; mu: bigint }[] = []; // גל-116·G37: מחזור-השירותים (service·USDS) — מדידת-המהירות k
+const taxWin: { ts: number; mu: bigint }[] = []; // גל-116·G37: מס-טהור-לכספת (tax·USDS) — טענת-גבייה-בשיעור-החוק
 const WIN_MS = 60 * 60_000;
 function winFeed(win: { ts: number; mu: bigint }[], ts: number, mu: bigint) { win.push({ ts, mu }); if (win.length > 50_000) win.splice(0, 10_000); } // סף-בטיחות-זיכרון
 function winSum(win: { ts: number; mu: bigint }[]): bigint {
@@ -308,6 +313,8 @@ function winSum(win: { ts: number; mu: bigint }[]): bigint {
 }
 function wageSpendLastHourMu(): bigint { return winSum(wageWin); }
 function incomeLastHourMu(): bigint { return winSum(incomeWin); }
+function serviceLastHourMu(): bigint { return winSum(serviceWin); } // גל-116·G37
+function taxLastHourMu(): bigint { return winSum(taxWin); } // גל-116·G37
 /* נותר-ממכסת-הקצב-השעתית. 0 = חסום-בכנות (אין-תקציב או שהמכסה-נוצלה).
  * המכסה-עצמה = חוק-טהור-יחיד wagePaceCapMu ב-lib/mu.ts (מקור-אמת-יחיד · ננעל-בטסטים). */
 function wagePaceRemainingMu(): bigint {
@@ -451,6 +458,9 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   else if (t.kind === "bond-interest") bondInterestMu += amtMu;
   else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: חלון-הקצב-ניזון-מהספר-עצמו
   else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") incomeAccruedMu += amtMu; else incomeSaosMu += amtMu; } // איסוף-עמלות-בריכה
+  // גל-116·G37: חלון-המהירות — מחזור-השירותים (apply-וגם-replay — חוק-הסימטריה)
+  if (t.kind === "service" && t.asset === "USDS") winFeed(serviceWin, t.ts, amtMu);
+  if (t.kind === "tax" && t.to === "treasury" && t.asset === "USDS") winFeed(taxWin, t.ts, amtMu);
   // גל-112 · G33 · חלון-הכנסה-אמת-השעתית (מקור-יחיד = הספר; ext-deposit-ניזון-בענף-שלו)
   if (t.asset === "USDS" && t.to === "treasury" && (t.kind === "tax" || t.kind === "dex-fee" || t.kind === "dividend" || t.kind === "infra")) winFeed(incomeWin, t.ts, amtMu);
   byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
@@ -753,11 +763,13 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") { pool.usds -= amtMu; incomeAccruedMu += amtMu; } else { pool.saos -= amtMu; incomeSaosMu += amtMu; } bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
         else if (t.kind === "tax" || t.kind === "dex-fee") { if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; }
         else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: סימטריית-replay-מלאה
+        if (t.kind === "service" && t.asset === "USDS") winFeed(serviceWin, t.ts, amtMu); // גל-116·G37: סימטריית-המהירות
+        if (t.kind === "tax" && t.to === "treasury" && t.asset === "USDS") winFeed(taxWin, t.ts, amtMu); // גל-116·G37: סימטריית-המס
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
         byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
         byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;
         // גל-115 · G36 · חוקי-המושל-נשחזרים-מהספר (סימטריית-apply/replay — החוק-חלק-מההיסטוריה)
-        if (t.kind === "policy") applyGovLaw((t as any).policy);
+        if (t.kind === "policy") { applyGovLaw((t as any).policy); govLawFromBook = { law: govLawNow(), at: t.ts }; } // גל-116·G37: החוק-מהספר-בשחזור
         // גל-112 · G33 · replay-משקף-את-חלון-ההכנסה-מילה-במילה (חוק-הסימטריה)
         if (t.asset === "USDS" && t.to === "treasury" && (t.kind === "tax" || t.kind === "dex-fee" || t.kind === "dividend" || t.kind === "infra")) winFeed(incomeWin, t.ts, amtMu);
         seq = t.seq; lastH = h; prev = h; replayed++;
@@ -1216,6 +1228,53 @@ const server = Bun.serve({
         }
         lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked };
         return Response.json({ ...r, replayParity });
+      }
+      /* ── גל-116 · G37 · GET /claims — פנקס-הטענות-החי-של-הכלכלה ──
+       * כל-טענה = מבחן-פלסיבילי-מכונה עם מדידה-טרייה (S-grade-מוכן לפדרציה ולעמיתים —
+       * תעלול-העמיתים R310: "fleet-economy בלתי-נגיש" — מעתה נגישה-מכונה-למכונה).
+       * אפס-סודות · אפס-סיפורים: כל-טענה נמדדת-כאן-ועכשיו מהספר-החי. */
+      if (url.pathname === "/claims") {
+        const now2 = Date.now();
+        const m2 = govMeasure();
+        const lawNow = govLawNow();
+        const dec2 = closureDecompose(m2, lawNow);
+        const target = sustainablePaceOf(m2);
+        const c2 = closureOf(m2);
+        // שלמות-שרשרת: lastVerify-טרי-או-אימות-חי (verifyChain-קריאה-בלבד — הריפוי-חי-רק-ב-/verify)
+        let vOk = lastVerify?.ok ?? null;
+        let vChecked = lastVerify?.checked ?? null;
+        let vAgeSec = lastVerify ? Math.round((now2 - lastVerify.at) / 1000) : null;
+        if (!lastVerify || now2 - lastVerify.at > 10 * 60_000) { const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAgeSec = 0; }
+        // גבייה-בשיעור-החוק: מס-טהור/שירותים ≈ taxBps/10000 (±25% — עיגולים/יחידות)
+        const svc = m2.serviceUsds1h ?? 0, taxPure = toF(taxLastHourMu());
+        const taxMeasured = svc > 5 ? taxPure / svc : null;
+        const taxLaw = lawNow.taxBps / 10_000;
+        // יתרות-שליליות = ספר-קרוע (חשבונאות-כפולה — אף-חשבון-לא-יכול-להיות-שלילי)
+        let minUsds = 0, minSaos = 0;
+        for (const v of balances.values()) { const u = toF(v.usds), s = toF(v.saos); if (u < minUsds) minUsds = u; if (s < minSaos) minSaos = s; }
+        // runway-משמרת: הכספת-שורדת-לפחות-14-ימים-בקצב-השריפה-הנוכחי
+        const burn2 = Math.max(0, m2.wageUsds1h - m2.incomeUsds1h);
+        const treasUsds = toF(bal("treasury").usds);
+        const runwayHours = burn2 > 0 ? treasUsds / burn2 : Infinity;
+        const claims = [
+          { id: "chain-integrity", claim: "השרשרת-מאומתת-מקצה-לקצה-והשחזור-פריטי (replayParity)", pass: vOk === true && replayParity === true, measured: { verifyOk: vOk, checked: vChecked, replayParity, verifyAgeSec: vAgeSec } },
+          { id: "law-is-book", claim: "החוק-החי-שווה-לשורת-החוק-החתומה-בספר (אפס-חוק-מפלג)", pass: govLawFromBook ? JSON.stringify(govLawFromBook.law) === JSON.stringify(lawNow) : null, measured: { fromBook: govLawFromBook?.law ?? null, live: lawNow, bookAt: govLawFromBook?.at ?? null } },
+          { id: "no-negative-balances", claim: "אף-חשבון-אינו-שלילי (USDS·SAOS — חשבונאות-כפולה-שלמה)", pass: minUsds >= 0 && minSaos >= 0, measured: { minUsds, minSaos, accounts: balances.size } },
+          { id: "windows-alive", claim: "חלונות-המדידה-חיים (שכר ושירותים בשעה האחרונה)", pass: m2.wageRows1h > 0 && svc > 0, measured: { wageRows1h: m2.wageRows1h, wageUsds1h: +m2.wageUsds1h.toFixed(2), serviceUsds1h: +svc.toFixed(2) } },
+          { id: "tax-at-law-rate", claim: `המס-נגבה-בשיעור-החוק (${lawNow.taxBps / 100}% ±25%)`, pass: taxMeasured === null ? null : Math.abs(taxMeasured - taxLaw) <= taxLaw * 0.25, measured: { measuredRate: taxMeasured === null ? null : +taxMeasured.toFixed(6), lawRate: taxLaw, taxUsds1h: +taxPure.toFixed(3), serviceUsds1h: +svc.toFixed(2) } },
+          { id: "owner-report-cadence", claim: "דו\"ח-הבעלים-בקצב-החוקתי (כל-6ש' — הבעלים-לא-נשכח)", pass: now2 - (govStats.lastReportAt || bootedAt) < CONSTITUTION.reportEveryMs, measured: { lastReportAt: govStats.lastReportAt, nextDueAt: (govStats.lastReportAt || bootedAt) + CONSTITUTION.reportEveryMs, reportEveryMs: CONSTITUTION.reportEveryMs } },
+          { id: "runway-guard", claim: "הכספת-שורדת-לפחות-14-ימים-בקצב-השריפה-החי", pass: Number.isFinite(runwayHours) ? runwayHours >= 14 * 24 : true, measured: { burnUsds1h: +burn2.toFixed(2), treasuryUsds: +treasUsds.toFixed(2), runwayDays: Number.isFinite(runwayHours) ? +(runwayHours / 24).toFixed(1) : null } },
+          { id: "pace-at-equilibrium", claim: "הרצפה-במרחק-כנה-משווי-המשקל (≤25% מעל קצב-בר-קיימא)", pass: target > 0 ? lawNow.wageHourFloorUsds <= target * 1.25 : null, measured: { floor: lawNow.wageHourFloorUsds, sustainablePace: +target.toFixed(1), velocity: dec2.velocity === null ? null : +dec2.velocity.toFixed(2), kStar: dec2.kStar === null ? null : +dec2.kStar.toFixed(1) } },
+        ];
+        const graded = claims.filter((x) => x.pass !== null) as { id: string; claim: string; pass: boolean; measured: any }[];
+        const passN = graded.filter((x) => x.pass).length;
+        return Response.json({
+          ok: true, engine: "fleet-economy", seq, ts: now2,
+          grade: `${passN}/${graded.length}`, allPass: passN === graded.length,
+          closure1h: Number.isFinite(c2) ? +c2.toFixed(6) : null,
+          claims,
+          law: "G37 · פנקס-טענות-חי (גל-116) — כל-טענה-פלסיבילית-ומדידה-טרייה · תעלול-עמיתים-R310: נגישות-מכונה-למכונה",
+        });
       }
       /* ── POST /tx/ingest — קליטת-אירועי-מערכת אמיתיים לספר (לופבק-בלבד) ──
        * כל-עסקה ממופה 1:1 לאירוע שקרה במערכת (מילוי-דקס · בדיקת-אתחול · אטימה).
