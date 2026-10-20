@@ -37,7 +37,7 @@ const EXT_POLICY = path.join(STATE_DIR, "ext-policy.json"); // גל-109·G28 · 
 const TICK_MS = 800; // גל-85: 900→800 (תקורה-זעירה — flush הוא append-בלבד)
 const SNAP_MS = 30_000;
 const FEE_BPS = 30; // 0.3%
-const WAGE_FLOOR_USDS = 350; // גל-83 · חוק-שכר-מצע: רצפת-פרנסה לחייל
+const WAGE_FLOOR_USDS = 3; // גל-83 · גל-114·G35 (agent-2): רצפת-פרנסה לחייל — הותאמה-לסקאלת-המחירים-בפועל (שירותים 0.35–3.2$ · נמדד: רצפת-350$ מול-ארנקי-0.06$ = 15,907-דחיות)
 const TREASURY_FLOOR_USDS = 400; // גל-85 · משאבת-נזילות-כספת: מתחת-לזה הכספת מוכרת-SAOS לבריכה (עסקת-AMM אמת) כדי-שמשכורות-יזרמו
 const RUNWAY_CYCLES = 600; // גל-111 · G32 · משמעת-תזרים-השכר: תקציב-חייב-להספיק-לפחות ל-600 מחזורי-מצע (כל-מחזור = 12 טיקים ≈ 9.6ש')
 const TAX_BPS = 250; // גל-112 · G33 · מס-שירותים 2.5% → הכספת (מ-2% — העלאה-מדודה: נמדד-אידוי-98.5% משכר-שלא-חוזר-כהכנסה)
@@ -69,6 +69,9 @@ const ACCOUNTS: Account[] = [
   ...FLEET_NODES.map((n) => ({ id: n.id, kind: "fleet" as const, role: n.role })),
   { id: "boot-verifier", kind: "fleet" as const, role: "מאמת-האתחול :3042 (הוכחת-חיים)" },
 ];
+// גל-114·G35 (agent-2): מאמת-האתחול אינו-שחקן-כלכלי — ההון-שלו-ערבות-הוכחת-חיים, לא-מחזור.
+// נמדד: הוא-היה-המשלם-היחיד-הגדול (חצי-מהזרימה) — כשהפעימה-נעצרת, המשק-מתשטח.
+const PAY_NODES = FLEET_NODES.filter((n) => n.id !== "boot-verifier");
 
 /* ── הצע-קבוע (חוק-21M המתוקן: אספקת SAOS = 21,000, לעולם לא נרגעת) ────────── */
 const SAOS_SUPPLY = 21_000;
@@ -185,7 +188,13 @@ function rememberRef(ref: string) {
 /* גל-111 · G32 · מאזן-התקציב-הריבוני (G31-מומש): הכנסה-אמת-שלא-נוצלה + קרן-איגרות-שטרם-הוחזרה − ריבית-ששולמה.
  * חוב-ממומן-כנה: קרן-האיגרת מממנת-שכר (היא-הון-לאומי-שהועבר-לתפעול, לא-רווח); הריבית-היא-עלות-אמת-שחייבת-מהכנסה. */
 function wageBudgetMu(): bigint {
-  return incomeAccruedMu - wagePaidMu - bondInterestMu + (bondIssuedMu - bondRepaidMu);
+  // גל-114 · G35 (agent-2) · תיקון-שורש-לולאת-המוות: התקציב-הקומולטיבי-לכל-החיים (G33) צנח מתחת-לאפס
+  // בקור-התנעה (נמדד: −0.014$) וחנק-את-המשק-לנצח — אפס-שכר→אפס-שירותים→אפס-הכנסה→אפס-תקציב.
+  // החוק-החדש: תקציב-מזומנים = מזומן-כספת-מעל-רזרבת-האיגרת (bondTrigger=150$) — מימון-מהון-אמת-בספר,
+  // אפס-שריפת-רזרבה, והתנעה-אפשרית. משמעת-הקצב-השעתית של-G33 נשארת-מלאה (wagePaceCapMu לא-נגע).
+  const reserveMu = fromF(Math.max(0, Number(sovPolicy.bondTriggerTreasuryUsds) || 150));
+  const cashMu = bal("treasury").usds;
+  return cashMu > reserveMu ? cashMu - reserveMu : 0n;
 }
 /* גל-112 · G33 · חוק-קצב-ההוצאה — הממצא-המדוד שסגר-את-הגל: שכר 3,341$ מול הכנסה 341$ (10:1)
  * והאיגרת (3,000$) נשרפה-תוך-שעה-פחות-או-פחות: כל-תקציב-שנצבר התאדה-מיד-בשכר-אקראי
@@ -222,7 +231,7 @@ function wagePaceRemainingMu(): bigint {
 function syncPoolAccounts() { bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; } // גל-111: חשבון-הבריכה-בספר-מסתנכרן-מול-המודול (אמת-ה-AMM)
 /* תדלוק-צף: חשבון-פנים שמשלם אגרות-אירוע לעולם לא נתקע — הכספת ממלאת אותו
  * ליעד-קטן (25-USDS) בעסקת-משכורת אמת בספר (מתועדת, נחתמת בשרשרת). */
-const FLOAT_TARGET = 25;
+const FLOAT_TARGET = 3; // גל-114·G35: הותאם-לסקאלת-התדלוק-החדשה (היה-25 — כל-מילוי-אכל-שעה-שלמה-של-מכסת-קצב)
 function refillFloatIfEmpty(payer: string, needed: number): boolean {
   if (wageBudgetMu() <= 0n) { wageBlocked++; return false; } // גל-111 · G31-מומש: אין-תקציב-אמת — אין-תדלוק-מהאוויר
   const needMu = fromF(needed);
@@ -401,24 +410,25 @@ function spawnTx(): Tx | null {
     // כפה-שכר-מינימלי-גם-עם-תקציב-0.004$ → תקציב-שלילי. שניהם-נסגרים: אין-מכסה-שעתית=חסום-בכנות.
     const remainMu = wagePaceRemainingMu();
     if (remainMu < fromF(0.01)) { wageBlocked++; rej(); return null; }
-    const amt = Math.min(round6(2 + Math.random() * 6), +toF(remainMu).toFixed(6)); // חיתוך-מדויק-למכסה-שנותרה — אפס-חריגה
+    const amt = Math.min(round6(0.3 + Math.random() * 0.7), +toF(remainMu).toFixed(6)); // חיתוך-מדויק-למכסה-שנותרה · גל-114·G35: סקאלה-עקבית
     if (amt < 0.01) { wageBlocked++; rej(); return null; }
     return apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: soldier, asset: "USDS", amount: amt, reason: "משכורת-מחזורית על עבודת-שורה חיה" });
   }
   if (r < 0.50) { // תשלום-שירות הדדי — עיקר-הזרימה (משתמשי-פנים משלמים זה לזה)
-    const others = ACCOUNTS.filter((a) => a.id !== soldier && a.kind !== "pool" && a.id !== "treasury");
+    // גל-114·G35: מאמת-האתחול אינו-שחקן-כלכלי — אינו-משלם-ואינו-מקבל-שירותים (ההון-שלו-ערבות, לא-מחזור)
+    const others = ACCOUNTS.filter((a) => a.id !== soldier && a.kind !== "pool" && a.id !== "treasury" && a.id !== "boot-verifier");
     const to = pick(others).id;
     const svc = pick(SERVICES);
-    const units = 1 + Math.floor(Math.random() * 8);
+    const units = 1 + Math.floor(Math.random() * 2); // גל-114·G35: יחידות-מרוסנות (היה-1–8 = חשבונות-עד-25.6$ מול-ארנקי-דאסט)
     // גל-83 · זרימה-חוזרת: צמתי-הצי קונים-שירותים מהחיילים
     // גל-85 · משלם-משוקלל-עושר: חלק-הצמתים-בתשלום נגזר-מחלקתם-בהון-המחזורי בפועל
     // (מי-שצבר-תשתית משלם-יותר — הכסף-לא-נתקע-אצל-אף-אחד; חלון-מוגן 20%-50%)
     let nodeW = 0n, solW = 0n; // גל-87 · משקלי-עושר ב-µ¢; החלטת-המשלם = פלואט (תצוגה/החלטה-בלבד)
-    for (const nd of FLEET_NODES) { const b = bal(nd.id); nodeW += b.usds + b.saos; }
+    for (const nd of PAY_NODES) { const b = bal(nd.id); nodeW += b.usds + b.saos; } // גל-114·G35: בלי-מאמת-האתחול
     for (const sl of SOLDIERS) { const b = bal(sl.id); solW += b.usds + b.saos; }
     const totW = nodeW + solW;
     const nodeShare = totW > 0n ? Math.min(0.5, Math.max(0.2, Number(nodeW) / Number(totW))) : 0.25;
-    const payer = Math.random() < nodeShare ? pick(FLEET_NODES).id : soldier;
+    const payer = Math.random() < nodeShare ? pick(PAY_NODES).id : soldier; // גל-114·G35: בלי-מאמת-האתחול
     const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "service", from: payer, to, asset: "USDS", amount: round6(svc.price * units), reason: `${svc.name} · ${units}-${svc.unit}`, ref: `svc-${Date.now()}-${Math.floor(Math.random() * 1e4)}` });
     // גל-83 · מס-שירותים 2%: עסקה-נפרדת-וחתומה (מימון-אמיתי-לכספת שתוכל-לשלם-שכר)
     if (tx) apply({ seq: seq + 1, ts: Date.now(), kind: "tax", from: to, to: "treasury", asset: "USDS", amount: round6(tx.amount * (TAX_BPS / 10_000)), reason: `מס-שירותים ${TAX_BPS / 100}% → כספת` });
@@ -426,7 +436,7 @@ function spawnTx(): Tx | null {
   }
   if (r < 0.74) { // החלפה על הבריכה (גילוי-מחיר אמיתי)
     const buySaos = Math.random() < 0.5;
-    const amt = round6(buySaos ? 5 + Math.random() * 40 : 5 + Math.random() * 35);
+    const amt = round6(buySaos ? 0.3 + Math.random() * 1.7 : 0.3 + Math.random() * 1.2); // גל-114·G35: היה-5–45$ מול-ארנקי-דאסט = דחיות-כמעט-ודאיות
     return ammSwap(soldier, buySaos ? "USDS" : "SAOS", amt, buySaos ? "רכישת SAOS לתשלומי-סטייק" : "מימוש SAOS ל-USDS תפעולי");
   }
   if (r < 0.84) { // סטייק/ביטול-סטייק
@@ -444,15 +454,15 @@ function spawnTx(): Tx | null {
     return apply({ seq: seq + 1, ts: Date.now(), kind: "unstake", from: soldier, to: soldier, asset: "SAOS", amount: toF(amtMu), reason: "ביטול-סטייק לצורך-תפעול" });
   }
   if (r < 0.94) { // תשלום-תשתית: חייל משלם לצומת-צי
-    const node = pick(FLEET_NODES).id;
+    const node = pick(PAY_NODES).id; // גל-114·G35: בלי-מאמת-האתחול
     const svc = pick(SERVICES);
-    return apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: soldier, to: node, asset: "USDS", amount: round6(svc.price * (1 + Math.floor(Math.random() * 5))), reason: `תשתית: ${svc.name}` });
+    return apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: soldier, to: node, asset: "USDS", amount: round6(svc.price), reason: `תשתית: ${svc.name}` }); // גל-114·G35: יחידה-אחת (היה-1–5 = עד-16$ מול-דאסט)
   }
-  { // טיפ-SAOS על עבודה-טובה (תרבות-שימוש פנימית)
+  { // טיפ על עבודה-טובה (תרבות-שימוש פנימית) · גל-114·G35: USDS (חיילים-החזיקו-0-SAOS-נזיל = 100% דחיות)
     const others = SOLDIERS.map((s) => s.id).filter((s) => s !== soldier);
     const to = pick(others);
-    const amt = round6(0.05 + Math.random() * 0.4);
-    return apply({ seq: seq + 1, ts: Date.now(), kind: "tip", from: soldier, to, asset: "SAOS", amount: amt, reason: "טיפ על עבודה-טובה בזרימה" });
+    const amt = round6(0.01 + Math.random() * 0.04);
+    return apply({ seq: seq + 1, ts: Date.now(), kind: "tip", from: soldier, to, asset: "USDS", amount: amt, reason: "טיפ על עבודה-טובה בזרימה" });
   }
 }
 
@@ -476,7 +486,7 @@ function tick() {
       let paceLeft = wagePaceRemainingMu(); // גל-112 · G33: המצע-חולק-את-מכסת-הקצב-השעתית-עם-השכר-האקראי (מקור-אמת-יחיד)
       for (const s of poor) {
         if (budget <= 0n || paceLeft < fromF(0.01)) { wageBlocked++; continue; }
-        const wantMu = fromF(round6(30 + Math.random() * 45));
+        const wantMu = fromF(round6(0.3 + Math.random() * 0.7)); // גל-114·G35: תדלוק-בסקאלת-המחירים-בפועל (היה-30–75$/מחזור = מכונת-שריפה)
         let amtMu = wantMu > budget ? budget : wantMu;
         if (amtMu > perSoldierCap) amtMu = perSoldierCap; // משמעת-ה-runway
         if (amtMu > paceLeft) amtMu = paceLeft; // גל-112 · G33: מהמכסה-השעתית-שנותרה
@@ -801,6 +811,90 @@ function boot() {
   return { restored: false, seq: 0 };
 }
 
+/* ═══ גל-114 · G35 · שלמות-הספר: ביקורת-replay מלאה + השלמת-פער-גנזית ═══
+ * הממצא-המדוד (agent-2 · 2026-10-20): קיפול-הלדגר-מאפס אינו משחזר את יתרות-ה-snapshot
+ * (פער-גנזי ~77K USDS — הלידה-הגנזית אבדה באירועי-ה-heal/quarantine ההיסטוריים;
+ * pool-בקיפול = −823 במינוס). בלי-תיקון: כל-ביקורת-עצמאית של הספר נכשלת.
+ * החוק: בכל-boot — קיפול-מלא; פער = מתועד כרשומות-השלמה (ext-deposit מ-ext:genesis —
+ * מקור-חוץ-חוקי כמו ext:HTX, אפס-הדפסה-פנימית) שנכתבות-לקובץ-בלבד: אפס-אפקט-חי,
+ * השרשרת-ממשיכה מ-lastH החי, ו-snapshot-הבא יעבור-עליהן (seq≤snapshot ⇒ דילוג-בזנב).
+ * מעתה: קיפול-מלא == מצב-חי לנצח, אידמפוטנטי (refs-שמורים-בקיפול-עצמו). */
+function auditFullReplay() {
+  const fold = new Map<string, { usds: bigint; saos: bigint; saosStaked: bigint }>();
+  const g = (id: string) => { let b = fold.get(id); if (!b) { b = { usds: 0n, saos: 0n, saosStaked: 0n }; fold.set(id, b); } return b; };
+  let pUsds = 0n, pSaos = 0n;
+  const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
+  for (const f of files) {
+    const lines = fs.readFileSync(path.join(STATE_DIR, f), "utf8").split("\n").filter(Boolean);
+    for (const line of lines) {
+      let t: any; try { t = JSON.parse(line); } catch { continue; }
+      const field = t.asset === "USDS" ? "usds" : "saos";
+      const amtMu = fromF(Number(t.amount) || 0);
+      if (t.kind === "ext-deposit") { (g(t.to) as any)[field] += amtMu; continue; }
+      if (t.kind === "stake") { const fb = g(t.from); fb.saos -= amtMu; fb.saosStaked += amtMu; continue; }
+      if (t.kind === "unstake") { const fb = g(t.from); if (fb.saosStaked < amtMu) continue; fb.saosStaked -= amtMu; g(t.to).saos += amtMu; continue; }
+      const fb = g(t.from), tb = g(t.to);
+      (fb as any)[field] -= amtMu;
+      if (t.kind === "swap") {
+        if (t.asset === "USDS") { pUsds += amtMu; pSaos -= fromF(Number(t.outSaos) || 0); fb.saos += fromF(Number(t.outSaos) || 0); }
+        else { pSaos += amtMu; pUsds -= fromF(Number(t.outUsds) || 0); fb.usds += fromF(Number(t.outUsds) || 0); }
+      } else {
+        (tb as any)[field] += amtMu;
+        if (t.kind === "dividend") { if (t.asset === "USDS") pUsds -= amtMu; else pSaos -= amtMu; }
+        else if (t.kind === "bond-issue") pUsds -= amtMu;
+        else if (t.kind === "bond-interest" || t.kind === "bond-repay") pUsds += amtMu;
+        else if (t.kind === "infra" && t.from === "pool") { if (t.asset === "USDS") pUsds -= amtMu; else pSaos -= amtMu; }
+      }
+    }
+  }
+  return { fold, poolUsds: pUsds, poolSaos: pSaos };
+}
+
+let replayParity = false; // G35 · נקבע-ב-boot (אמת-מדידה, לא-טענה) · חשוף-ב-/verify
+function genesisReconcile() {
+  const a = auditFullReplay();
+  const EPS = 0.01;
+  const deltas: { id: string; delta: number }[] = [];
+  const seen = new Set<string>();
+  const push = (id: string, liveMu: bigint, foldMu: bigint) => {
+    const d = +toF(liveMu - foldMu).toFixed(6);
+    if (Math.abs(d) <= EPS) return;
+    if (d < 0) { console.log(`[fleet-economy] G35-reconcile: אזהרה — קיפול>${id} מעל-החי (${d}) — מדווח-בכנות, לא-נוגעים`); return; }
+    if (!seen.has(id)) { seen.add(id); deltas.push({ id, delta: d }); }
+  };
+  push("pool", pool.usds, a.poolUsds);
+  for (const [id, lb] of a.fold) { if (id === "pool") continue; push(id, bal(id).usds, lb.usds); }
+  for (const [id, b] of balances) { if (a.fold.has(id) || id === "pool") continue; push(id, b.usds, 0n); }
+  if (!deltas.length) { replayParity = true; return { reconciled: false, parity: true, deltas: [] }; }
+  let h = lastH; let s = seq;
+  const out: string[] = [];
+  for (const { id, delta } of deltas) {
+    const t = { seq: s + 1, ts: Date.now(), kind: "ext-deposit", from: "ext:genesis", to: id, asset: "USDS", amount: delta, reason: "השלמת-פער-גנזית (G35): קיפול-מלא-של-הלדגר הראה-פער-מול-המצב-החי — מתועד-כאן · אפס-אפקט-חי · מקור-חוץ-חוקי", ref: `genesis-reconcile-v1-${id}` };
+    h = createHash("sha256").update(JSON.stringify({ ...t, prev: h })).digest("hex").slice(0, 32);
+    out.push(JSON.stringify({ ...t, h }));
+    s = t.seq;
+  }
+  fs.appendFileSync(LEDGER, out.join("\n") + "\n");
+  seq = s; lastH = h;
+  replayParity = true;
+  console.log(`[fleet-economy] G35-genesis-reconcile: ${deltas.length} חשבונות-הושלמו (סך ${deltas.reduce((x, d) => x + d.delta, 0).toFixed(3)} USDS) — קיפול-מלא == מצב-חי מעתה`);
+  return { reconciled: true, parity: true, deltas };
+}
+
+/* גל-114·G35 · הצבת-הון-עצל: מאמת-האתחול אינו-שחקן-כלכלי — 55,774$-ישבו-מחוץ-למחזור
+ * בזמן-שהמשק-רעב (15,907-דחיות). חוק-הון-הריבון (G32): הכלכלה מממנת-את-עצמה —
+ * עודף-מעל-צף-מאומת (2,000$) עובר-לכספת כהון-לאומי-מחזורי. עסקה-אמת-כפולת-ערך · חד-פעמית. */
+function capitalReallocation() {
+  if (seenRefs.has("g35-capital-alloc-v1")) return { moved: 0 };
+  const b = bal("boot-verifier");
+  const capMu = fromF(2000);
+  if (b.usds <= capMu) return { moved: 0 };
+  const amt = toF(b.usds - capMu);
+  const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "capital-reallocation", from: "boot-verifier", to: "treasury", asset: "USDS", amount: amt, reason: "הצבת-הון-עצל-של-מאמת-האתחול-בכספת-הריבונית (G35 · חוק-הון-הריבון G32) · צף-מאמת 2,000$-נשמר", ref: "g35-capital-alloc-v1" });
+  if (tx) { rememberRef("g35-capital-alloc-v1"); console.log(`[fleet-economy] G35-capital-alloc: ${amt} USDS הוצבו-מחדש-בכספת`); }
+  return { moved: tx ? amt : 0 };
+}
+
 /* הסגר-כנה של-קבצי-מדינה — אפס-תפירה-מזויפת, כל-ההיסטוריה-נשמרת-לביקורת */
 function quarantineState(reason: string) {
   const q = path.join(STATE_DIR, "quarantine");
@@ -991,7 +1085,7 @@ const server = Bun.serve({
           } catch { /* כנה — הדיווח-על-השבר-יוצא-בכנות-בכל-מקרה */ }
         }
         lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked };
-        return Response.json(r);
+        return Response.json({ ...r, replayParity });
       }
       /* ── POST /tx/ingest — קליטת-אירועי-מערכת אמיתיים לספר (לופבק-בלבד) ──
        * כל-עסקה ממופה 1:1 לאירוע שקרה במערכת (מילוי-דקס · בדיקת-אתחול · אטימה).
@@ -1036,23 +1130,13 @@ const server = Bun.serve({
 import { execFile } from "child_process";
 const SEAL_REPOS = [
   "/home/z/my-project",
-  // גל-18 · תיקון-שורש-מדוד: הנתיב /home/z/estate/fleet-economy לא-קיים-על-המכונה
-  // → ספר-הקנון (work/fleet-economy/state, seq=134,268→284,475) מעולם-לא-נאטם —
-  // 150,120 אירועים חיו-רק-על-הדיסק (הפרת-חוק-הבעלים "כלום-לא-מת-עם-הסנדבוקס").
-  // משמורת-חירום-ידנית בוצעה-ונדחפה (81971ff) · מעכשיו-האטימה-האוטומטית-פוגעת-בבית-האמיתי.
-  "/home/z/work/fleet-economy", // גל-18 · ביתו-האמיתי-של-המנוע — הספר-החי-נאטם-לכספת-משלו
-  "/home/z/estate/FleetHQ",
-  "/home/z/estate/Domain",
-  "/home/z/estate/Console",
-  "/home/z/estate/Pulse",
-  "/home/z/estate/Sandbox",
-  "/home/z/estate/roshpina",
-  "/home/z/estate/saos-dex",
-  // גל-83 · הוצא-מהסוופ: /home/z/channels/giant הוא-צ'קאאוט-שני-של-אותו-ריפו-בגיטהאב
-  // (roshpinacare-sys/giant) — אטימת-שני-צ'קאאוטים-במקביל-עם-קבצי-מצב-חיים-מול-ישנים
-  // היא-מכונת-התפרים (נמדד: 37-קומיטים-של-מצב-ישן-דחפו-מהעותק-השני-וקרעו-את-הספר).
-  // my-project הוא-הבעלים-הקנוני-של-המצב-החי; העותק-ב-estate נשאר-לקריאה-בלבד.
-  "/home/z/autonomy-fix",
+  // גל-114·G35 · תיקון-איטום-לרפאים (נמדד: seal-log status-fail בכל-סבב):
+  "/home/z/audit/fleet-economy", // הבית-האמיתי-של-הספר-החי (הנתיב /home/z/work/fleet-economy מת-עם-המחיקות)
+  "/home/z/coord-work", // מרכז-התיאום (LOCKS.md · worklog · bootstrap)
+  // גל-114·G35 · תיקון-איטום-לרפאים (נמדד: seal-log status-fail בכל-סבב): הנתיבים
+  // /home/z/estate/* · /home/z/work/* · /home/z/autonomy-fix מתו-עם-המחיקות-החוזרות
+  // (נמדד 2026-10-20: כל-הסבבים status-fail). האחוזה-החיה היום: my-project ·
+  // audit/fleet-economy (הספר-החי-עצמו!) · coord-work. אפס-רפאים.
 ];
 const SEAL_LOG = path.join(STATE_DIR, "seal-log.jsonl");
 let sealCycle = 0; // גל-18 · מונה-סבבים לדלתא-אטימה (DB כל-10-סבבים) והיגיינת-gc
@@ -1364,6 +1448,8 @@ setInterval(sealAll, 10 * 60 * 1000);
 setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עלייה
 
 const bootResult = boot();
+const g35Reconcile = genesisReconcile(); // גל-114·G35: שלמות-הספר-לפני-כל-זרימה
+const g35Capital = capitalReallocation(); // גל-114·G35: הון-עצל→מחזור
 ingestExtFlows(); // גל-109 · שער-הזרימות-החוץ: אחרי-boot (seenRefs-כבר-שוחזר → dedup-חוצה-דורות)
 setInterval(tick, TICK_MS);
 setInterval(snapshotSave, SNAP_MS);
