@@ -107,6 +107,13 @@ function mkState() {
   for (const n of ["n1", "n2"]) bal.get(n)!.usds = fromF(300);
   return { bal, pool: { saos: fromF(8000), usds: fromF(8030), feesUsds: 0n, feesSaos: 0n } };
 }
+/* גל-111 · G32 · ה-invariant-הכספי-האמיתי של עידן-האוצר: Σ(חשבונות-הספר-ללא-צל-הבריכה) + מודול-הבריכה.
+ * חשבון-"pool" בספר הוא צל-מסונכרן-של מודול-ה-AMM (הפנטום-המתועד-מגל-85) — נספר-פעם-אחת-בלבד דרך-המודול. */
+function sumG32(st: SovState): { usds: Mu; saos: Mu } {
+  let usds = 0n, saos = 0n;
+  for (const [id, b] of st.bal.entries()) { if (id === "pool") continue; usds += b.usds; saos += b.saos + b.saosStaked; }
+  return { usds: usds + st.pool.usds, saos: saos + st.pool.saos };
+}
 function worldSum(st: ReturnType<typeof mkState>): { usds: Mu; saos: Mu } {
   let usds = 0n, saos = 0n;
   for (const b of st.bal.values()) { usds += b.usds; saos += b.saos + b.saosStaked; }
@@ -329,13 +336,11 @@ describe("G32 · חוק-הון-הריבון", () => {
   test("שימור-עולם: דיבידנד/איגרת/ריבית/החזר — אפס-הדפסה (50K צעדים)", () => {
     for (let trial = 0; trial < 20; trial++) {
       const st = mkSovState();
-      const w0 = worldSum(st as any);
+      const w0 = sumG32(st);
       let seq = 0;
       for (let i = 0; i < 2_500; i++) {
         const r = Math.random();
-        if (r < 0.3) { // סבב-אוצר: עמלה נצברת → דיבידנד 50%
-          const fee = fromF(rnd6(0.01, 3));
-          st.pool.feesUsds += fee; st.pool.usds += fee; // העמלה-נכנסת-לשרותי-הבריכה (כמו-ב-AMM)
+        if (r < 0.3) { // סבב-אוצר: עמלות-שנצברו-מ-swap-אמיתיות → דיבידנד 50% (אפס-הזרקה-מהאוויר)
           const take = (st.pool.feesUsds * 50n) / 100n;
           if (take >= 1n) sovApply(st, sovTx(++seq, "dividend", "pool", "treasury", "USDS", take));
         } else if (r < 0.45 && st.bondIssued - st.bondRepaid === 0n) { // הנפקה-במכסות
@@ -361,8 +366,8 @@ describe("G32 · חוק-הון-הריבון", () => {
           if (buySaos) { t.outSaos = out; t.fee = fee; } else { t.outUsds = out; t.fee = fee; }
           sovApply(st, t);
         }
-        const w = worldSum(st as any);
-        expect(w.usds).toBe(w0.usds); // אפס-הדפסה — החוב-הוא-העברה
+        const w = sumG32(st);
+        expect(w.usds).toBe(w0.usds); // אפס-הדפסה — החוב-הוא-העברה (invariant-G32: ללא-צל-הבריכה)
         expect(w.saos).toBe(w0.saos);
       }
     }
@@ -372,10 +377,11 @@ describe("G32 · חוק-הון-הריבון", () => {
       const ledger: Tx[] = [];
       let seq = 0;
       const stA = mkSovState();
+      // מצב-סנאפשות: עמלת-AMM שנצברה-מזרימות-קודמות (חלק-מהמצב, לא-מהזנב)
+      stA.pool.feesUsds += fromF(2); stA.pool.usds += fromF(2);
       // זרימה-חיה: איגרת → דיבידנד → שכר → ריבית → החזר
       const issue = sovBondHeadroom(stA, { maxUsds: fromF(3_000), poolSharePct: 12, perIssuance: fromF(300) });
       if (sovApply(stA, sovTx(++seq, "bond-issue", "pool", "treasury", "USDS", issue))) ledger.push(sovTx(seq, "bond-issue", "pool", "treasury", "USDS", issue));
-      stA.pool.feesUsds += fromF(2); stA.pool.usds += fromF(2);
       const div = (fromF(2) * 50n) / 100n;
       if (sovApply(stA, sovTx(++seq, "dividend", "pool", "treasury", "USDS", div))) ledger.push(sovTx(seq, "dividend", "pool", "treasury", "USDS", div));
       const sal = fromF(50);
@@ -384,8 +390,9 @@ describe("G32 · חוק-הון-הריבון", () => {
       if (sovApply(stA, sovTx(++seq, "bond-interest", "treasury", "pool", "USDS", int))) ledger.push(sovTx(seq, "bond-interest", "treasury", "pool", "USDS", int));
       const rep = fromF(10);
       if (sovApply(stA, sovTx(++seq, "bond-repay", "treasury", "pool", "USDS", rep))) ledger.push(sovTx(seq, "bond-repay", "treasury", "pool", "USDS", rep));
-      // replay-זנב מהסנאפשוט (מצב-זהה-מזריעה)
+      // replay-זנב מהסנאפשוט (מצב-הסנאפשוט כולל-את-העמלה-שנצברה — זהה-ל-stA-טרם-הזנב)
       const stB = mkSovState();
+      stB.pool.feesUsds += fromF(2); stB.pool.usds += fromF(2);
       for (const t of ledger) sovApply(stB, t); // החוק: replay-זהה-ל-apply (מנוע-אמת: שתי-המימושות-חייבות-להיות-מילה-במילה)
       expect(stB.incomeAccrued).toBe(stA.incomeAccrued);
       expect(stB.wagePaid).toBe(stA.wagePaid);
