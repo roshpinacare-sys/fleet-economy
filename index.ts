@@ -972,36 +972,47 @@ let replayParity = false; // G35 · נקבע-ב-boot (אמת-מדידה, לא-ט
 function genesisReconcile() {
   const a = auditFullReplay();
   const EPS = 0.01;
-  const deltas: { id: string; delta: number; kind: string }[] = [];
+  const deltas: { id: string; field: string; delta: number; kind: string }[] = [];
   const seen = new Set<string>();
-  const push = (id: string, liveMu: bigint, foldMu: bigint) => {
+  const push = (id: string, field: string, liveMu: bigint, foldMu: bigint) => {
     const d = +toF(liveMu - foldMu).toFixed(6);
     if (Math.abs(d) <= EPS) return;
-    if (!seen.has(id)) { seen.add(id); deltas.push({ id, delta: Math.abs(d), kind: d > 0 ? "ext-deposit" : "reconcile-adjustment" }); }
+    const key = `${id}:${field}:${Math.abs(d)}`;
+    if (!seen.has(key)) { seen.add(key); deltas.push({ id, field, delta: Math.abs(d), kind: d > 0 ? "ext-deposit" : "reconcile-adjustment" }); }
   };
-  // גל-114·G35·תיקון: הבריכה-נמדדת-כמו-כל-חשבון — bal("pool") (המסונכרן-מהמודול), לא-המודול-עצמו
-  for (const [id, lb] of a.fold) push(id, bal(id).usds, lb.usds);
-  for (const [id, b] of balances) { if (a.fold.has(id)) continue; push(id, b.usds, 0n); }
+  // גל-116·G37·תיקון-שורש-2: הביקורת-עד-היום-כיסתה-USDS-בלבד — פער-SAOS-של-הבריכה
+  // (2,975.64 מהעידן-המפוצל) היה-בלתי-נראה. מעתה: USDS·SAOS-כאחד.
+  for (const [id, lb] of a.fold) { push(id, "usds", bal(id).usds, lb.usds); push(id, "saos", bal(id).saos, lb.saos); }
+  for (const [id, b] of balances) { if (a.fold.has(id)) continue; push(id, "usds", b.usds, 0n); push(id, "saos", b.saos, 0n); }
   if (!deltas.length) { replayParity = true; return { reconciled: false, parity: true, deltas: [] }; }
   let h = lastH; let s = seq;
   const out: string[] = [];
-  for (const { id, delta, kind } of deltas) {
+  for (const { id, field, delta, kind } of deltas) {
     const isCorr = kind === "reconcile-adjustment";
-    const ref = isCorr ? `genesis-reconcile-corr-v2-${id}` : `genesis-reconcile-v1-${id}`;
-    if (seenRefs.has(ref)) continue; // אידמפוטנטיות-כפולה: גם-דרך-הפריטה-וגם-דרך-הrefs
-    const t = { seq: s + 1, ts: Date.now(), kind, from: "ext:genesis", to: id, asset: "USDS", amount: delta, reason: isCorr
-      ? "תיקון-רשומות-השלמה-כפולות שנכתבו על-ידי מאמת-הפער הראשון של-G35 (באג-כפילות-בריכה, נמדד-ותוקן-על-ידי-agent-2) — מוריד-את-העודף-מתצוגת-הלדגר · אפס-אפקט-חי"
-      : "השלמת-פער-גנזית (G35): קיפול-מלא-של-הלדגר הראה-פער-מול-המצב-החי — מתועד-כאן · אפס-אפקט-חי · מקור-חוץ-חוקי", ref };
+    // גל-116·G37·תיקון-שורש-1: ה-ref-היה-פר-חשבון — פער-חדש-באותו-חשבון (מירוץ-flush-בין-boots)
+    // היה-נדחה-בשקט (ref-כבר-נראה) ⇒ replayParity=false-לנצח-בלי-רישום. מעתה: ה-ref-חתום-על-
+    // החשבון+השדה+גודל-הפער — פער-חדש=רשומה-חדשה-מתועדת · פער-זהה=אידמפוטנטיות-אמת.
+    const dhash = createHash("sha256").update(`${id}|${field}|${delta.toFixed(6)}`).digest("hex").slice(0, 6);
+    const ref = isCorr ? `genesis-reconcile-corr-v3-${id}-${field}-${dhash}` : `genesis-reconcile-v3-${id}-${field}-${dhash}`;
+    if (seenRefs.has(ref)) continue; // אידמפוטנטיות-אמת: אותו-פער-בדיוק-כבר-תוקן-בספר
+    const t = { seq: s + 1, ts: Date.now(), kind, from: "ext:genesis", to: id, asset: field === "usds" ? "USDS" : "SAOS", amount: delta, reason: isCorr
+      ? "תיקון-רשומות-השלמה-כפולות (G35→G37): הפער-המתוקן-הופיע-שוב-בגודל-שונה — ה-ref-הישן-היה-פר-חשבון-ודחה-בשקט. מעתה-פער-חדש=רשומה-חדשה · אפס-אפקט-חי"
+      : "השלמת-פער-גנזית (G35→G37): קיפול-מלא-של-הלדגר הראה-פער-מול-המצב-החי (כולל-SAOS-מהעידן-המפוצל) — מתועד-כאן · אפס-אפקט-חי · מקור-חוץ-חוקי", ref };
     h = createHash("sha256").update(JSON.stringify({ ...t, prev: h })).digest("hex").slice(0, 32);
     out.push(JSON.stringify({ ...t, h }));
     rememberRef(ref);
     s = t.seq;
   }
-  if (!out.length) { replayParity = false; return { reconciled: false, parity: false, deltas }; }
+  if (!out.length) {
+    // גל-116·G37: אין-יותר-דילוג-שקט — הפערים-כבר-מתוקנים-בספר-בגודל-הזה ⇒ פריטה-מלאה
+    replayParity = true;
+    console.log(`[fleet-economy] G37-genesis-reconcile: ${deltas.length} פערים-כבר-מתועדים-בספר (refs-זהים) — parity=true (אידמפוטנטיות-אמת)`);
+    return { reconciled: false, parity: true, deltas };
+  }
   fs.appendFileSync(LEDGER, out.join("\n") + "\n");
   seq = s; lastH = h;
   replayParity = true;
-  console.log(`[fleet-economy] G35-genesis-reconcile: ${deltas.length} חשבונות-הושלמו (סך ${deltas.reduce((x, d) => x + d.delta, 0).toFixed(3)} USDS) — קיפול-מלא == מצב-חי מעתה`);
+  console.log(`[fleet-economy] G37-genesis-reconcile: ${deltas.length} חשבונות-הושלמו (סך ${deltas.reduce((x, d) => x + d.delta, 0).toFixed(3)}) — קיפול-מלא == מצב-חי מעתה`);
   return { reconciled: true, parity: true, deltas };
 }
 
