@@ -499,9 +499,11 @@ function tick() {
           if (t3) { pool.usds += repayMu; syncPoolAccounts(); }
         }
       }
-      // (ה) הנפקת-איגרת-חוב: כשהכספת-מתחת-לטריגר-והתקציב-מאוזן — מימון-עצמי-מהון-הבריכה.
+      // (ה) הנפקת-איגרת-חוב: כשהתקציב-החי-מאוזן/שלילי — מימון-עצמי-מהון-הבריכה.
+      // גל-111 · תיקון-טריגר-מדיד: ההנפקה-נקבעת-לפי-התקציב-החי (מצב-מימון-השכר) ולא-לפי-יתרת-הכספת —
+      // נמדד: הכספת-החזיקה-403$ (ממכירות-SAOS-אמת) והתקציב-היה-שלילי-והשכר-חסום = מחסום-עצמי-שקרי.
       // מכסות-חוק: חוב-כולל ≤ bondMaxUsds · ≤ bondMaxPoolSharePct מיתרת-הבריכה · קצירה-הדרגתית ≤ bondPerIssuanceUsds.
-      if (sovPolicy.bondEnabled && bal("treasury").usds < fromF(sovPolicy.bondTriggerTreasuryUsds) && wageBudgetMu() <= fromF(50)) {
+      if (sovPolicy.bondEnabled && wageBudgetMu() <= fromF(50)) {
         const headroom = fromF(sovPolicy.bondMaxUsds) - (bondIssuedMu - bondRepaidMu);
         const poolCap = (pool.usds * BigInt(sovPolicy.bondMaxPoolSharePct)) / 100n;
         let issueMu = headroom < poolCap ? headroom : poolCap;
