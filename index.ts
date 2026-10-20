@@ -28,7 +28,7 @@ import path from "path";
 // בזיכרון; הסידור (פנקס + snapshot) נשאר מספרי-6-ספרות זהה-בייטים — רצף-hash נשמר.
 import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, wagePaceCapMu, type Mu } from "./lib/mu";
 /* גל-115 · G36 · מושל-המדיניות-הריבוני: המנוע-עצמו-המחוקק — מדידה→החלטה→חוק-בספר→בדיקת-תוצאה */
-import { CONSTITUTION, governorDecide, governorOutcome, emptyCooldowns, closureOf, type GovPolicy, type GovCooldowns, type GovMeasure, type GovLever } from "./lib/governor";
+import { CONSTITUTION, governorDecide, governorOutcome, emptyCooldowns, closureOf, closureDecompose, sustainablePaceOf, type GovPolicy, type GovCooldowns, type GovMeasure, type GovLever } from "./lib/governor"; // גל-116·G37: +שווי-המשקל-המבני
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
