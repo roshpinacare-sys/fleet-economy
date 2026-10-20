@@ -447,7 +447,12 @@ function tick() {
       const want = toF(wantMu);
       const px = Math.max(0.01, priceUsdsPerSaos());
       const saosIn = round6(Math.min(toF(bal("treasury").saos), (want / (px * (1 - FEE_BPS / 10_000))) * 1.25, 30));
-      if (saosIn > 0.01) ammSwap("treasury", "SAOS", saosIn, "משאבת-נזילות-כספת: SAOS→USDS לתדלוק-משק-הפנים (עסקת-AMM אמת)");
+      // גל-111 · G32 · מעגל-המימון-העצמי-המלא: הכנסות-מכירת-ה-SAOS-שנאספו-כעמלות הן-הכנסת-אמת-הנספרת-לתקציב
+      // (נמדד: בלעדי-הספירה הכספת-החזיקה-402$-והתקציב-הראה-שלילי — פער-חשבונאות-נתפס-ונסגר)
+      if (saosIn > 0.01) {
+        const sold = ammSwap("treasury", "SAOS", saosIn, "משאבת-נזילות-כספת: SAOS→USDS לתדלוק-משק-הפנים (עסקת-AMM אמת)");
+        if (sold && (sold as any).outUsds !== undefined) incomeAccruedMu += fromF((sold as any).outUsds); // הכנסת-אמת: מכירת-נכס-אמת
+      }
     }
     // גל-111 · G32 · סבב-אוצר-ריבוני (כל-treasuryRoundTicks): דיבידנד-עמלות · ריבית · החזר-חוב · הנפקה-מותנית.
     // זהו-מנוע-המימון-העצמי: הרשת-מממנת-את-הנהלתה-מעמלות-השוק-שלה-ומהונה-הלאומי-הכלוא (בחוב-מחויב-בספר — אפס-הדפסה).
