@@ -27,6 +27,8 @@ import path from "path";
 // גל-87 · מיגרציית-יתרות: כל-היתרות (balances) והבריכה (pool) חיים-כ-BigInt µ¢
 // בזיכרון; הסידור (פנקס + snapshot) נשאר מספרי-6-ספרות זהה-בייטים — רצף-hash נשמר.
 import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, wagePaceCapMu, type Mu } from "./lib/mu";
+/* גל-115 · G36 · מושל-המדיניות-הריבוני: המנוע-עצמו-המחוקק — מדידה→החלטה→חוק-בספר→בדיקת-תוצאה */
+import { CONSTITUTION, governorDecide, governorOutcome, emptyCooldowns, closureOf, type GovPolicy, type GovCooldowns, type GovMeasure, type GovLever } from "./lib/governor";
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
@@ -40,7 +42,8 @@ const FEE_BPS = 30; // 0.3%
 const WAGE_FLOOR_USDS = 3; // גל-83 · גל-114·G35 (agent-2): רצפת-פרנסה לחייל — הותאמה-לסקאלת-המחירים-בפועל (שירותים 0.35–3.2$ · נמדד: רצפת-350$ מול-ארנקי-0.06$ = 15,907-דחיות)
 const TREASURY_FLOOR_USDS = 400; // גל-85 · משאבת-נזילות-כספת: מתחת-לזה הכספת מוכרת-SAOS לבריכה (עסקת-AMM אמת) כדי-שמשכורות-יזרמו
 const RUNWAY_CYCLES = 600; // גל-111 · G32 · משמעת-תזרים-השכר: תקציב-חייב-להספיק-לפחות ל-600 מחזורי-מצע (כל-מחזור = 12 טיקים ≈ 9.6ש')
-const TAX_BPS = 250; // גל-112 · G33 · מס-שירותים 2.5% → הכספת (מ-2% — העלאה-מדודה: נמדד-אידוי-98.5% משכר-שלא-חוזר-כהכנסה)
+/* גל-115 · G36: המס-אינו-קבוע-קוד עוד — כשיר-חוק-בספר (מנוף-המושל) */
+let taxBps = 250; // גל-112 · G33 · מס-שירותים 2.5% → הכספת (מ-2% — העלאה-מדודה: נמדד-אידוי-98.5% משכר-שלא-חוזר-כהכנסה)
 const SOV_POLICY = path.join(STATE_DIR, "sov-policy.json"); // גל-111 · G32 · חוק-הון-הריבון (מדיניות-מוצהרת-בקנון · המנוע קורא-ב-boot בלבד)
 
 /* ── משתמשי-הפנים ─────────────────────────────────────────────────────────── */
@@ -173,6 +176,97 @@ try {
   };
   console.log(`[fleet-economy] sov-policy G35: feeShare=${sovPolicy.feeToTreasuryPct}% round=${sovPolicy.treasuryRoundTicks}t bond=${sovPolicy.bondEnabled ? "ON" : "OFF"} max=${sovPolicy.bondMaxUsds}$ (${sovPolicy.bondMaxPoolSharePct}%pool) rate=${sovPolicy.bondInterestBpsAnnual / 100}%/y pace=runway${sovPolicy.wageRunwayHours}h×income${sovPolicy.wagePctOfIncome}%·floor${sovPolicy.wageHourFloorUsds}$ (cash-backed-budget)`);
 } catch { /* אין-מדיניות = ברירת-המחדל-הזהירה */ }
+
+/* ═══ גל-115 · G36 · מושל-המדיניות-הריבוני ═══
+ * המנדט (הבעלים): הארכיטקטורה-מחליטה-הכל-בעצמה — חשיבה·בדיקה·תכנון — והכל-חי
+ * גם-כשהבעלים-לא-קיים, אבל-הבעלים-לא-נשכח (הוא-הנהנה · דו"ח-כל-6-שעות-בספר).
+ * עד-היום: כל-מדיניות-כלכלית-שונתה-ידנית (רצפת 3→100→250$ ביד · מס 2→2.5% ביד).
+ * הממצא-המדוד-שפתח-את-החוק: הכנסה 38.9$/שעה מול שכר 250$/שעה = שריפה-211$/שעה
+ * → runway-~10-ימים. טענת-G35 "סבב-סגור" הייתה-השקר-המבני-השמיני.
+ * החוקה-מגבילה-את-המושל (CONSTITUTION ב-lib/governor.ts — ננעלה-בקנון). */
+let govPolicy: GovPolicy = { wageHourFloorUsds: sovPolicy.wageHourFloorUsds, taxBps, feeToTreasuryPct: sovPolicy.feeToTreasuryPct };
+let govCooldowns: GovCooldowns = emptyCooldowns();
+type GovPending = { ref: string; lever: GovLever; field: string; from: number; to: number; closure0: number; ts: number; checkAt: number };
+let govPending: GovPending[] = [];
+let govStats = { decisions: 0, verified: 0, failed: 0, freezes: 0, lastDecisionAt: 0, lastReportAt: 0, lastNetWorthUsds: null as number | null };
+/* אכילת-חוק מהספר/הסנאפשוט — מופעלת-גם-חי-וגם-ב-replay (סימטריית-apply/replay · חוק-הסימטריה) */
+function applyGovLaw(law: Partial<GovPolicy> | null | undefined) {
+  if (!law) return;
+  if (Number.isFinite(law.wageHourFloorUsds)) sovPolicy.wageHourFloorUsds = Math.max(0, Math.min(10_000, Number(law.wageHourFloorUsds)));
+  if (Number.isFinite(law.taxBps)) taxBps = Math.max(0, Math.min(5_000, Math.floor(Number(law.taxBps))));
+  if (Number.isFinite(law.feeToTreasuryPct)) sovPolicy.feeToTreasuryPct = Math.max(0, Math.min(100, Math.floor(Number(law.feeToTreasuryPct))));
+  govPolicy = { wageHourFloorUsds: sovPolicy.wageHourFloorUsds, taxBps, feeToTreasuryPct: sovPolicy.feeToTreasuryPct };
+}
+const govLawNow = (): GovPolicy => ({ wageHourFloorUsds: sovPolicy.wageHourFloorUsds, taxBps, feeToTreasuryPct: sovPolicy.feeToTreasuryPct });
+function winCount(win: { ts: number; mu: bigint }[]): number { const cut = Date.now() - WIN_MS; let c = 0; for (const e of win) if (e.ts >= cut) c++; return c; }
+function govMeasure(): GovMeasure { return { incomeUsds1h: toF(incomeLastHourMu()), wageUsds1h: toF(wageSpendLastHourMu()), wageRows1h: winCount(wageWin), ts: Date.now() }; }
+
+/* פסקי-דין: החלטות-שעבר-בדיקתן — המדידה-בפועל-מול-הצפוי · 3-כישלונות-רצופים → הקפאת-המנוף-6ש' */
+function governorOutcomes(now: number) {
+  for (const d of [...govPending]) {
+    if (now < d.checkAt) continue;
+    const m = govMeasure();
+    const cNow = closureOf(m);
+    const cNowF = Number.isFinite(cNow) ? +cNow.toFixed(6) : 999999;
+    const { verdict, delta } = governorOutcome(d.closure0, cNowF);
+    apply({ seq: seq + 1, ts: now, kind: "govern-outcome", from: "treasury", to: "treasury", asset: "USDS", amount: 0, reason: `פסק-דין-ריבוני ${verdict}: ${d.lever} ${d.from}→${d.to} · סגירות ${d.closure0}→${cNowF} (Δ${delta >= 0 ? "+" : ""}${delta}) · צפי: עלייה`, ref: `${d.ref}-out`, gov: { verdict, delta, closure0: d.closure0, closureNow: cNowF } } as any);
+    if (verdict === "verified") { govStats.verified++; govCooldowns.failStreak[d.lever] = 0; }
+    else {
+      govStats.failed++;
+      govCooldowns.failStreak[d.lever] = (govCooldowns.failStreak[d.lever] ?? 0) + 1;
+      if (govCooldowns.failStreak[d.lever] >= CONSTITUTION.freezeAfterFails) {
+        govCooldowns.freezes[d.lever] = now + CONSTITUTION.freezeMs;
+        govCooldowns.failStreak[d.lever] = 0;
+        govStats.freezes++;
+      }
+    }
+    govCooldowns.lastIncomeUsds = m.incomeUsds1h;
+    govPending = govPending.filter((x) => x.ref !== d.ref);
+  }
+}
+
+/* מחזור-החקיקה: מדידה → הכרעה-חוקתית → שורת-חוק-בספר → רשומת-החלטה → בדיקה-מתוכננת */
+function governorLegislate(now: number) {
+  const m = govMeasure();
+  const d = governorDecide(m, govLawNow(), govCooldowns, now);
+  if (!d) return;
+  const ref = `g36-${d.lever}-${now}`;
+  const law = govLawNow(); (law as any)[d.field] = d.to;
+  // שורת-החוק: החוק-החדש-כחלק-מהספר — נשחזר-דטרמיניסטית-בכל-boot
+  apply({ seq: seq + 1, ts: now, kind: "policy", from: "treasury", to: "treasury", asset: "USDS", amount: 0, reason: `חוק-G36-המושל-הריבוני: ${d.field} ${d.from}→${d.to} (מנוף-${d.lever} · סגירות-${d.closure.toFixed(3)})`, ref, policy: law } as any);
+  applyGovLaw(law);
+  // רשומת-ההחלטה: המדידה · ההשערה · התוצאה-הצפויה · מועד-הבדיקה (חשיבה-בדוקה-מתועדת)
+  const decRef = `${ref}-dec`;
+  apply({ seq: seq + 1, ts: now, kind: "govern", from: "treasury", to: "treasury", asset: "USDS", amount: 0, reason: `החלטה-ריבונית-עצמאית (${d.lever}): ${d.field} ${d.from}→${d.to} — ${d.hypothesis}`, ref: decRef, gov: { lever: d.lever, field: d.field, from: d.from, to: d.to, closure0: +d.closure.toFixed(6), hypothesis: d.hypothesis, expect: d.expect, checkAt: now + CONSTITUTION.checkMs } } as any);
+  govPending.push({ ref: decRef, lever: d.lever, field: d.field, from: d.from, to: d.to, closure0: +d.closure.toFixed(6), ts: now, checkAt: now + CONSTITUTION.checkMs });
+  govCooldowns.lastChangeAt[d.lever] = now;
+  govCooldowns.lastIncomeUsds = m.incomeUsds1h;
+  govStats.decisions++; govStats.lastDecisionAt = now;
+}
+
+/* דו"ח-הבעלים (חוק-לא-לשכוח-את-הבעלים): הריבון-מנהל-לטובת-הבעלים-ומשאיר-לו-זיכרון-כתוב-בספר */
+function ownerReport(now: number) {
+  syncPoolAccounts();
+  let usdsTotal = 0n, saosTotal = 0n;
+  for (const b of balances.values()) { usdsTotal += b.usds; saosTotal += b.saos + b.saosStaked; }
+  const price = priceUsdsPerSaos();
+  const netWorth = toF(usdsTotal) + toF(saosTotal) * price;
+  const m = govMeasure();
+  const cNow = closureOf(m);
+  const burn = m.wageUsds1h - m.incomeUsds1h;
+  const runwayH = burn > 0.0001 ? toF(bal("treasury").usds) / burn : Infinity;
+  const delta = govStats.lastNetWorthUsds === null ? null : +(netWorth - govStats.lastNetWorthUsds).toFixed(4);
+  apply({ seq: seq + 1, ts: now, kind: "owner-report", from: "treasury", to: "treasury", asset: "USDS", amount: 0, reason: `דו\"ח-בעלים (G36-המושל): הון-נטו ${netWorth.toFixed(2)}$ · Δ ${delta === null ? "ראשון" : (delta >= 0 ? "+" : "") + delta + "$"} · סגירות ${Number.isFinite(cNow) ? cNow.toFixed(3) : "∞"} · runway ${Number.isFinite(runwayH) ? runwayH.toFixed(0) + "ש'" : "∞"} · החלטות ${govStats.decisions} (מאומתות-${govStats.verified} · נכשלו-${govStats.failed}) — הריבון-מנהל-הרשת-לטובת-הבעלים`, ref: `g36-owner-report-${now}`, owner: { netWorthUsds: +netWorth.toFixed(4), deltaUsds: delta, closure: Number.isFinite(cNow) ? +cNow.toFixed(6) : null, runwayHours: Number.isFinite(runwayH) ? +runwayH.toFixed(1) : null, decisions: govStats.decisions, verified: govStats.verified, failed: govStats.failed, treasuryUsds: +toF(bal("treasury").usds).toFixed(4), poolUsds: +toF(pool.usds).toFixed(4), priceUsdsPerSaos: +price.toFixed(6), taxBps, wageHourFloorUsds: sovPolicy.wageHourFloorUsds } } as any);
+  govStats.lastReportAt = now; govStats.lastNetWorthUsds = netWorth;
+}
+
+/* מחזור-המושל-המלא — נקרא-מהטיק (כל-100-טיקים ≈ 80ש') */
+function governorCycle() {
+  const now = Date.now();
+  governorOutcomes(now);
+  governorLegislate(now);
+  if (now - (govStats.lastReportAt || bootedAt) >= CONSTITUTION.reportEveryMs) ownerReport(now);
+}
 const seenRefs = new Map<string, number>(); // ref → ts (דהיות: פקודות-כפולות של מפיקים לא נספרות פעמיים)
 const SEEN_REFS_CAP = 20_000;
 const SEEN_REFS_SNAP = 5_000; // כמה-refs-שורדים-ב-snapshot (האחרונים-ראשית — Map שומר-סדר-הכנסה)
@@ -431,7 +525,7 @@ function spawnTx(): Tx | null {
     const payer = Math.random() < nodeShare ? pick(PAY_NODES).id : soldier; // גל-114·G35: בלי-מאמת-האתחול
     const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "service", from: payer, to, asset: "USDS", amount: round6(svc.price * units), reason: `${svc.name} · ${units}-${svc.unit}`, ref: `svc-${Date.now()}-${Math.floor(Math.random() * 1e4)}` });
     // גל-83 · מס-שירותים 2%: עסקה-נפרדת-וחתומה (מימון-אמיתי-לכספת שתוכל-לשלם-שכר)
-    if (tx) apply({ seq: seq + 1, ts: Date.now(), kind: "tax", from: to, to: "treasury", asset: "USDS", amount: round6(tx.amount * (TAX_BPS / 10_000)), reason: `מס-שירותים ${TAX_BPS / 100}% → כספת` });
+    if (tx) apply({ seq: seq + 1, ts: Date.now(), kind: "tax", from: to, to: "treasury", asset: "USDS", amount: round6(tx.amount * (taxBps / 10_000)), reason: `מס-שירותים ${taxBps / 100}% → כספת` });
     return tx;
   }
   if (r < 0.74) { // החלפה על הבריכה (גילוי-מחיר אמיתי)
@@ -584,6 +678,8 @@ function tick() {
       else if (acc < 0.70) nBase = Math.max(nBase - 2, N_MIN);
       winAttempts = 0; winRejected = 0;
     }
+    // גל-115 · G36 · מושל-המדיניות-הריבוני: מדידה→הכרעה→חוק-בספר→פסק-דין→דו"ח-בעלים (כל-100-טיקים ≈ 80ש')
+    if (tickNo % 100 === 0) governorCycle();
     flush(); // אטימה-לדיסק בכל-טיק: מוות-פתאום מאבד לכל-היותר טיק אחד
     const cutoff = Date.now() - 86_400_000;
     while (recent.length && recent[0] < cutoff) recent.shift();
@@ -660,6 +756,8 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
         byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
         byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;
+        // גל-115 · G36 · חוקי-המושל-נשחזרים-מהספר (סימטריית-apply/replay — החוק-חלק-מההיסטוריה)
+        if (t.kind === "policy") applyGovLaw((t as any).policy);
         // גל-112 · G33 · replay-משקף-את-חלון-ההכנסה-מילה-במילה (חוק-הסימטריה)
         if (t.asset === "USDS" && t.to === "treasury" && (t.kind === "tax" || t.kind === "dex-fee" || t.kind === "dividend" || t.kind === "infra")) winFeed(incomeWin, t.ts, amtMu);
         seq = t.seq; lastH = h; prev = h; replayed++;
@@ -763,6 +861,13 @@ function boot() {
       dividendPaidMu = fromF(Number(s.dividendPaid ?? 0)); dividendRounds = Number(s.dividendRounds ?? 0);
       bondIssuedMu = fromF(Number(s.bondIssued ?? 0)); bondRepaidMu = fromF(Number(s.bondRepaid ?? 0)); bondInterestMu = fromF(Number(s.bondInterest ?? 0));
       bondLastTs = Number(s.bondLastTs ?? 0);
+      // גל-115 · G36 · מצב-המושל-שורד-דורות (חוק-חי · החלטות-פתוחות · הקפאות · פסקי-דין)
+      if (s.gov) {
+        if (s.gov.policy) applyGovLaw(s.gov.policy);
+        if (Array.isArray(s.gov.pending)) govPending = s.gov.pending.filter((p: any) => p && typeof p.ref === "string" && Number.isFinite(p.checkAt));
+        if (s.gov.cooldowns) govCooldowns = { ...emptyCooldowns(), ...s.gov.cooldowns };
+        if (s.gov.stats) govStats = { ...govStats, ...s.gov.stats };
+      }
       // גל-87 · שימור-המדידה: attemptsTotal חייב לשרוד עלייה — בלי-זה acceptancePct מוצג
       // שלילי-מטופש (rejected היסטורי מול attempts צעירים). נמדד: -129163.1% אחרי-עלייה.
       if (typeof s.attemptsTotal === "number" && s.attemptsTotal > attemptsTotal) attemptsTotal = s.attemptsTotal;
@@ -1030,6 +1135,7 @@ function snapshotSave() {
     extImported: toF(extImportedMu), extPoolImported: toF(extPoolImportedMu), extCount, extDedup, extBad, // גל-109·G28: מדידת-ניתוב-שורדת-דורות
     incomeAccrued: toF(incomeAccruedMu), wagePaid: toF(wagePaidMu), wageBlocked, incomeSaos: toF(incomeSaosMu), // גל-111·G31-מומש
     dividendPaid: toF(dividendPaidMu), dividendRounds, bondIssued: toF(bondIssuedMu), bondRepaid: toF(bondRepaidMu), bondInterest: toF(bondInterestMu), bondLastTs, // גל-111·G32
+    gov: { policy: govLawNow(), pending: govPending, cooldowns: govCooldowns, stats: govStats }, // גל-115·G36: מצב-המושל-שורד-דורות
     seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
   const tmp = SNAP + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(obj));
@@ -1060,6 +1166,7 @@ const server = Bun.serve({
             law: "G32-חוק-הון-הריבון · G33-קצב-ההוצאה", wageBudgetUsds: +toF(wageBudgetMu()).toFixed(4),
             wageSpend1hUsds: +toF(wageSpendLastHourMu()).toFixed(4), income1hUsds: +toF(incomeLastHourMu()).toFixed(4), // גל-112·G33: מדידת-הקצב-חיה
             wagePaceRemainingUsds: +toF(wagePaceRemainingMu()).toFixed(4), wageRunwayHours: sovPolicy.wageRunwayHours, wagePctOfIncome: sovPolicy.wagePctOfIncome,
+            governor: { law: "G36-המושל-הריבוני (גל-115)", policy: govLawNow(), closure1h: (() => { const c = closureOf(govMeasure()); return Number.isFinite(c) ? +c.toFixed(4) : null; })(), pendingDecisions: govPending.length, decisions: govStats.decisions, verified: govStats.verified, failed: govStats.failed, freezes: govStats.freezes, freezeState: govCooldowns.freezes, lastReportAt: govStats.lastReportAt, lastNetWorthUsds: govStats.lastNetWorthUsds }, // גל-115·G36
             incomeAccruedUsds: +toF(incomeAccruedMu).toFixed(4), incomeSaos: +toF(incomeSaosMu).toFixed(4), wagePaidUsds: +toF(wagePaidMu).toFixed(4), wageBlocked,
             dividend: { paidUsds: +toF(dividendPaidMu).toFixed(4), rounds: dividendRounds, feeSharePct: sovPolicy.feeToTreasuryPct },
             bond: { enabled: sovPolicy.bondEnabled, issuedUsds: +toF(bondIssuedMu).toFixed(4), repaidUsds: +toF(bondRepaidMu).toFixed(4), interestUsds: +toF(bondInterestMu).toFixed(4), outstandingUsds: +toF(bondIssuedMu - bondRepaidMu).toFixed(4), annualBps: sovPolicy.bondInterestBpsAnnual, maxUsds: sovPolicy.bondMaxUsds, maxPoolSharePct: sovPolicy.bondMaxPoolSharePct },

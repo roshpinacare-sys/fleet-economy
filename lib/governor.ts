@@ -77,6 +77,7 @@ export interface GovCooldowns {
   lastChangeAt: Record<GovLever, number>; // 0 = מעולם-לא
   freezes: Record<GovLever, number>; // untilTs · 0 = חופשי
   failStreak: Record<GovLever, number>;
+  lastIncomeUsds?: number; // מדידת-הכנסה-אחרונה — בסיס-השוואת-הצמיחה (אין = אין-הגבלת-צמיחה)
 }
 
 export const emptyCooldowns = (): GovCooldowns => ({
@@ -147,12 +148,12 @@ export function governorDecide(
   }
 
   // ── מסלול-הצמיחה: סגירות-גבוהה + הכנסה-עולה-מדודה → הרמת-רצפה-זהירה ──
-  if (closure >= CONSTITUTION.closureHigh && p.wageHourFloorUsds < CONSTITUTION.floorMaxUsds) {
+  if (Number.isFinite(closure) && closure >= CONSTITUTION.closureHigh && p.wageHourFloorUsds < CONSTITUTION.floorMaxUsds) {
     if (!leverFree(c, "pace", now) || leverCool(c, "pace", now)) return null;
     // צמיחה-חוקתית: דורשת-הכנסה-עולה-מדודה (הצומח-בתנאי-צמיחה-אמת, לא-רעש)
-    const growthOk = (c as GovCooldowns & { lastIncomeUsds?: number }).lastIncomeUsds === undefined
+    const growthOk = c.lastIncomeUsds === undefined
       ? true // אין-בסיס-השוואה-טרי — ההכרעה-נשענת-על-סגירות-בלבד
-      : m.incomeUsds1h >= (c as GovCooldowns & { lastIncomeUsds?: number }).lastIncomeUsds! * CONSTITUTION.growthIncomeFactor;
+      : m.incomeUsds1h >= c.lastIncomeUsds * CONSTITUTION.growthIncomeFactor;
     if (!growthOk) return null;
     let to = p.wageHourFloorUsds * (1 + CONSTITUTION.floorRaisePct / 100);
     to = Math.min(CONSTITUTION.floorMaxUsds, Math.round(to * 10) / 10);
