@@ -39,6 +39,7 @@ const SNAP_MS = 30_000;
 const FEE_BPS = 30; // 0.3%
 const WAGE_FLOOR_USDS = 350; // גל-83 · חוק-שכר-מצע: רצפת-פרנסה לחייל
 const TREASURY_FLOOR_USDS = 400; // גל-85 · משאבת-נזילות-כספת: מתחת-לזה הכספת מוכרת-SAOS לבריכה (עסקת-AMM אמת) כדי-שמשכורות-יזרמו
+const RUNWAY_CYCLES = 600; // גל-111 · G32 · משמעת-תזרים-השכר: תקציב-חייב-להספיק-לפחות ל-600 מחזורי-מצע (כל-מחזור = 12 טיקים ≈ 9.6ש')
 const TAX_BPS = 200; // גל-83 · מס-שירותים 2% → הכספת (מימון-השכר)
 const SOV_POLICY = path.join(STATE_DIR, "sov-policy.json"); // גל-111 · G32 · חוק-הון-הריבון (מדיניות-מוצהרת-בקנון · המנוע קורא-ב-boot בלבד)
 
@@ -423,10 +424,14 @@ function tick() {
       const floorMu = fromF(WAGE_FLOOR_USDS);
       const poor = SOLDIERS.filter((s) => bal(s.id).usds < floorMu);
       let budget = wageBudgetMu();
+      // גל-111 · משמעת-תזרים: התקציב-מתוכנן-להספיק-לפחות ל-RUNWAY_CYCLES מחזורי-מצע (~96 דק')
+      // — נמדד: בלעדיו החוק-שרף-300$/9.6ש' ורוקן-איגרת-שלמה-בדקות (65:1-היסטורי-חוזר).
+      const perSoldierCap = budget / BigInt(RUNWAY_CYCLES);
       for (const s of poor) {
         if (budget <= 0n) { wageBlocked++; continue; }
         const wantMu = fromF(round6(30 + Math.random() * 45));
-        const amtMu = wantMu > budget ? budget : wantMu;
+        let amtMu = wantMu > budget ? budget : wantMu;
+        if (amtMu > perSoldierCap) amtMu = perSoldierCap; // משמעת-ה-runway
         if (amtMu < fromF(0.01)) { wageBlocked++; continue; }
         const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: s.id, asset: "USDS", amount: toF(amtMu), reason: `חוק-שכר-מצע (G31-מומש): תדלוק-פרנסה-מתקציב-אמת (רצפת ${WAGE_FLOOR_USDS})` });
         if (tx) budget -= amtMu; else wageBlocked++;
@@ -730,6 +735,8 @@ function boot() {
       const r = replayTailFromSnapshot(s);
       if (r.replayed > 0) console.log(`[fleet-economy] boot-tail-replay: +${r.replayed} עסקאות → seq=${seq}`);
       if (v.anchors?.length) console.log(`[fleet-economy] עוגני-תפר היסטוריים: ${v.anchors.length} (${v.anchors.map((a) => a.seq).join(",")}) — רציפות-מוכחת, אפס-שכתוב. צמיחה-מעבר = אזעקה`);
+      // גל-111 · מדידת-SVI: אימות-ה-boot מציב-את-lastVerify מיד — עמוד-שלמות-הספר-במדד-הריבונות-רואה-אמת-מהרגע-הראשון
+      lastVerify = { at: Date.now(), ok: true, checked: v.checked };
       return { restored: true, seq };
     }
   } catch { /* snapshot פגום → זריעה-כנה מחדש */ }
