@@ -352,9 +352,10 @@ const round6 = (x: number) => +x.toFixed(6);
 function spawnTx(): Tx | null {
   const r = Math.random();
   const soldier = pick(SOLDIERS).id;
-  if (r < 0.06) { // משכורת/תדלוק מהכספת (מנוזל, מההצע-הקבוע בלבד · G31-מומש: רק-מתקציב-אמת)
-    if (wageBudgetMu() <= 0n) { wageBlocked++; rej(); return null; }
-    const amt = round6(2 + Math.random() * 6);
+  if (r < 0.06) { // משכורת/תדלוק מהכספת (מנוזל, מההצע-הקבוע בלבד · G31-מומש: רק-מתקציב-אמת, מוגבל-לתקציב-בדיוק)
+    const budgetMu = wageBudgetMu();
+    if (budgetMu <= 0n) { wageBlocked++; rej(); return null; }
+    const amt = Math.max(0.01, Math.min(round6(2 + Math.random() * 6), +toF(budgetMu).toFixed(6))); // גל-111: אפס-חריגה-מהתקציב (נמדד: עודף-4.6$-נתפס-ותוקן)
     return apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: soldier, asset: "USDS", amount: amt, reason: "משכורת-מחזורית על עבודת-שורה חיה" });
   }
   if (r < 0.50) { // תשלום-שירות הדדי — עיקר-הזרימה (משתמשי-פנים משלמים זה לזה)
