@@ -169,9 +169,9 @@ try {
     bondRepayRunwayUsds: num(p?.bondRepayRunwayUsds, 0, 10_000, 600),
     wageRunwayHours: num(p?.wageRunwayHours, 1, 720, 8), // גל-112 · G33: חוק-קצב-ההוצאה
     wagePctOfIncome: num(p?.wagePctOfIncome, 0, 100, 80), // השכר-השעתי-מכוסה-הכנסה-אמת
-    wageHourFloorUsds: num(p?.wageHourFloorUsds, 0, 100, 1), // רצפת-חיים — נצנוץ-פעילות-גם-באפס-הכנסה
+    wageHourFloorUsds: num(p?.wageHourFloorUsds, 0, 10_000, 1), // גל-114·G35: המהדק-היה-0–100 ⇒ רצפת-250-נפלה-לברירת-מחדל-1-בכל-boot (נמדד: floor1$-ביומן-מול-250-בדיסק) — התקרה-הורחבה; התקציב-המזומנים-מגביל-בעצמו
   };
-  console.log(`[fleet-economy] sov-policy G33: feeShare=${sovPolicy.feeToTreasuryPct}% round=${sovPolicy.treasuryRoundTicks}t bond=${sovPolicy.bondEnabled ? "ON" : "OFF"} max=${sovPolicy.bondMaxUsds}$ (${sovPolicy.bondMaxPoolSharePct}%pool) rate=${sovPolicy.bondInterestBpsAnnual / 100}%/y pace=runway${sovPolicy.wageRunwayHours}h×income${sovPolicy.wagePctOfIncome}%·floor${sovPolicy.wageHourFloorUsds}$`);
+  console.log(`[fleet-economy] sov-policy G35: feeShare=${sovPolicy.feeToTreasuryPct}% round=${sovPolicy.treasuryRoundTicks}t bond=${sovPolicy.bondEnabled ? "ON" : "OFF"} max=${sovPolicy.bondMaxUsds}$ (${sovPolicy.bondMaxPoolSharePct}%pool) rate=${sovPolicy.bondInterestBpsAnnual / 100}%/y pace=runway${sovPolicy.wageRunwayHours}h×income${sovPolicy.wagePctOfIncome}%·floor${sovPolicy.wageHourFloorUsds}$ (cash-backed-budget)`);
 } catch { /* אין-מדיניות = ברירת-המחדל-הזהירה */ }
 const seenRefs = new Map<string, number>(); // ref → ts (דהיות: פקודות-כפולות של מפיקים לא נספרות פעמיים)
 const SEEN_REFS_CAP = 20_000;
