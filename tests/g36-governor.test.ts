@@ -62,13 +62,21 @@ describe("G36 · מושל-המדיניות-הריבוני — חוקה-והכר�
     expect(d2!.to).toBe(CONSTITUTION.taxMaxBps);
   });
 
-  test("קור-רוח: מנוף-ששונה-לא-נוגעים-בו-חצי-שעה (cooldown)", () => {
+  test("קור-רוח: מנוף-ששונה-לא-נוגעים-בו-חצי-שעה (cooldown) · כל-המנופים-בקור-רוח → שתיקה-כנה", () => {
     const c = emptyCooldowns();
     c.lastChangeAt.pace = NOW - CONSTITUTION.cooldownMs + 60_000; // עדיין-בקור-רוח
-    expect(governorDecide(measure(38.9, 250), law(), c, NOW)).toBeNull();
+    // המנוף-הקר-אינו-נוגע: ההכרעה-עוברת-למנוף-הבא (מס) — לא-חוזרת-אל-הקצב
+    const d = governorDecide(measure(38.9, 250), law(), c, NOW);
+    expect(d).not.toBeNull();
+    expect(d!.lever).not.toBe("pace");
+    // כל-המנופים-בקור-רוח → אף-החלטה (שתיקה-כנה)
+    const all = emptyCooldowns();
+    all.lastChangeAt = { pace: NOW - 60_000, tax: NOW - 60_000, fees: NOW - 60_000 };
+    expect(governorDecide(measure(38.9, 250), law(), all, NOW)).toBeNull();
     // אחרי-שהקור-רוח-עבר: חוזר-להכריע
-    c.lastChangeAt.pace = NOW - CONSTITUTION.cooldownMs - 1;
-    expect(governorDecide(measure(38.9, 250), law(), c, NOW)).not.toBeNull();
+    const c2 = emptyCooldowns();
+    c2.lastChangeAt.pace = NOW - CONSTITUTION.cooldownMs - 1;
+    expect(governorDecide(measure(38.9, 250), law(), c2, NOW)).not.toBeNull();
   });
 
   test("הקפאה-עצמית: מנוף-קפוא → המושל-עובר-למנוף-הבא (למד-את-גבולות-כוחו)", () => {
