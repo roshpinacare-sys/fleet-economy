@@ -299,6 +299,14 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
       (to as any)[field] += amtMu;
     }
   }
+  // גל-111 · G32/G31 · חשבונאות-האוצר: מקור-אמת-יחיד בתוך-apply (ה-replay משקף-מילה-במילה — חוק-הסימטריה)
+  if (t.kind === "tax" || t.kind === "dex-fee") { if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; }
+  else if (t.kind === "dividend") { incomeAccruedMu += amtMu; dividendPaidMu += amtMu; } // USDS-בלבד-בעיצוב
+  else if (t.kind === "bond-issue") bondIssuedMu += amtMu;
+  else if (t.kind === "bond-repay") bondRepaidMu += amtMu;
+  else if (t.kind === "bond-interest") bondInterestMu += amtMu;
+  else if (t.kind === "salary") wagePaidMu += amtMu;
+  else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") incomeAccruedMu += amtMu; else incomeSaosMu += amtMu; } // איסוף-עמלות-בריכה
   byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
   byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
   const signed = sealTx(t);
@@ -344,7 +352,8 @@ const round6 = (x: number) => +x.toFixed(6);
 function spawnTx(): Tx | null {
   const r = Math.random();
   const soldier = pick(SOLDIERS).id;
-  if (r < 0.06) { // משכורת/תדלוק מהכספת (מנוזל, מההצע-הקבוע בלבד)
+  if (r < 0.06) { // משכורת/תדלוק מהכספת (מנוזל, מההצע-הקבוע בלבד · G31-מומש: רק-מתקציב-אמת)
+    if (wageBudgetMu() <= 0n) { wageBlocked++; rej(); return null; }
     const amt = round6(2 + Math.random() * 6);
     return apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: soldier, asset: "USDS", amount: amt, reason: "משכורת-מחזורית על עבודת-שורה חיה" });
   }
@@ -407,12 +416,19 @@ function tick() {
     // זו-הזרימה-החוזרת-שחסרה: בלעדיה-הכסף-הצטבר-בבריכה/צמתים-והחיילים-נשארו-יבשים
     // (נמדד: 5,916-דחיות-מול-3,278-קבלות = 64% בזבוז-ניסיונות).
     if (tickNo % 12 === 0) {
-      // גל-85 · שכר-מצע מדורג: כל-חייל-מתחת-הרצפה מתודלק (לא אחד-נבחר) —
-      // נדרש כי ניסיונות-הפר-טיק גדלו ×4 (נמדד: ריפוד-יחיד = 33% דחיות)
+      // גל-85 · שכר-מצע מדורג + גל-111 · G31-מומש: כל-חייל-מתחת-הרצפה מתודלק — **רק-מתוך-תקציב-אמת**
+      // (הכנסה-שלא-נוצלה + קרן-איגרות-שטרם-הוחזרה). הממצא-המקצועי-של-גל-111: תקציב-G31 היה-תצוגה-ללא-מנגנון
+      // (המנוע מעולם לא כתב incomeAccrued/wagePaid) — והשפיכה-מהכספת-הריקה המשיכה-בכל-טיק. עתה: חוק-אמת.
       const floorMu = fromF(WAGE_FLOOR_USDS);
       const poor = SOLDIERS.filter((s) => bal(s.id).usds < floorMu);
+      let budget = wageBudgetMu();
       for (const s of poor) {
-        apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: s.id, asset: "USDS", amount: round6(30 + Math.random() * 45), reason: `חוק-שכר-מצע: תדלוק-פרנסה (רצפת ${WAGE_FLOOR_USDS})` });
+        if (budget <= 0n) { wageBlocked++; continue; }
+        const wantMu = fromF(round6(30 + Math.random() * 45));
+        const amtMu = wantMu > budget ? budget : wantMu;
+        if (amtMu < fromF(0.01)) { wageBlocked++; continue; }
+        const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "salary", from: "treasury", to: s.id, asset: "USDS", amount: toF(amtMu), reason: `חוק-שכר-מצע (G31-מומש): תדלוק-פרנסה-מתקציב-אמת (רצפת ${WAGE_FLOOR_USDS})` });
+        if (tx) budget -= amtMu; else wageBlocked++;
       }
     }
     // גל-85 · משאבת-נזילות-כספת (הזרימה-הסגורה שנעדרה): נמדד בפורנזיה 2026-10-17 —
@@ -427,17 +443,64 @@ function tick() {
       const saosIn = round6(Math.min(toF(bal("treasury").saos), (want / (px * (1 - FEE_BPS / 10_000))) * 1.25, 30));
       if (saosIn > 0.01) ammSwap("treasury", "SAOS", saosIn, "משאבת-נזילות-כספת: SAOS→USDS לתדלוק-משק-הפנים (עסקת-AMM אמת)");
     }
-    // גל-83 · איסוף-עמלות (כל-150-טיקים): עמלות-הבריכה (הכנסת-הרשת) זורמות-לכספת
-    if (tickNo % 150 === 0 && pool.feesUsds >= fromF(1)) {
-      // גל-86 · תיקון-עמלות (agent-2): איסוף חייב גם את יתרת-המודול של הבריכה
-      // (העמלות נכנסו לשרותי-הבריכה) + סנכרון bal("pool") — בדחייה-כנה המונה חוזר
-      // (לפני-כן: מונה מאופס גם-בדחייה = הכנסת-רשת נעלמה מהמדידה).
-      // גל-87 · µ¢: amtMu מדויק — toF(amtMu) שומר-6-ספרות זהות (הפיכות-מלאה).
-      const amtMu = pool.feesUsds;
-      pool.feesUsds = 0n;
-      const collected = apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: "pool", to: "treasury", asset: "USDS", amount: toF(amtMu), reason: "איסוף-עמלות-בריכה → כספת" });
-      if (collected) { pool.usds -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
-      else pool.feesUsds = amtMu;
+    // גל-111 · G32 · סבב-אוצר-ריבוני (כל-treasuryRoundTicks): דיבידנד-עמלות · ריבית · החזר-חוב · הנפקה-מותנית.
+    // זהו-מנוע-המימון-העצמי: הרשת-מממנת-את-הנהלתה-מעמלות-השוק-שלה-ומהונה-הלאומי-הכלוא (בחוב-מחויב-בספר — אפס-הדפסה).
+    if (tickNo % sovPolicy.treasuryRoundTicks === 0) {
+      syncPoolAccounts(); // חשבון-הבריכה-בספר-מתיישר-מול-אמת-ה-AMM לפני-כל-מגע (דטרמיניזם-מלא-מול-ה-replay)
+      // (א) דיבידנד-עמלות: חלק-החוק-מעמלות-ה-USDS-שנצברו זורם-לכספת כהכנסת-אמת; היתר-נשאר-מעמיק-את-הבריכה.
+      const feesU = pool.feesUsds;
+      if (feesU >= fromF(0.01)) {
+        const takeMu = (feesU * BigInt(sovPolicy.feeToTreasuryPct)) / 100n;
+        if (takeMu >= 1n) {
+          const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "dividend", from: "pool", to: "treasury", asset: "USDS", amount: toF(takeMu), reason: `דיבידנד-עמלות-בריכה (${sovPolicy.feeToTreasuryPct}% · G32-סבב-אוצר)` });
+          if (tx) { pool.feesUsds = feesU - takeMu; pool.usds -= takeMu; syncPoolAccounts(); dividendRounds++; }
+        }
+      }
+      // (ב) עמלות-SAOS: נאספות-לכספת כנכס-בריכה-שנצבר (הממצא-המדוד: מעולם לא נאספו — 114-SAOS-כלואים)
+      const feesS = pool.feesSaos;
+      if (feesS >= fromF(0.01)) {
+        const takeMu = (feesS * BigInt(sovPolicy.feeToTreasuryPct)) / 100n;
+        if (takeMu >= 1n) {
+          const tx = apply({ seq: seq + 1, ts: Date.now(), kind: "infra", from: "pool", to: "treasury", asset: "SAOS", amount: toF(takeMu), reason: `איסוף-עמלות-SAOS (${sovPolicy.feeToTreasuryPct}% · G32-סבב-אוצר)` });
+          if (tx) { pool.feesSaos = feesS - takeMu; pool.saos -= takeMu; syncPoolAccounts(); }
+        }
+      }
+      // (ג) ריבית-איגרות-חוב: נמדדת-פר-סבב-מאז-הסבב-הקודם (ריבית-חוקית-שנתית) — עלות-אמת-מהכספת
+      const debtNow0 = bondIssuedMu - bondRepaidMu;
+      if (debtNow0 > 0n && bondLastTs > 0) {
+        const elMs = Date.now() - bondLastTs;
+        const interestMu = (debtNow0 * BigInt(sovPolicy.bondInterestBpsAnnual) * BigInt(elMs)) / (10_000n * 365n * 24n * 3_600n * 1_000n);
+        if (interestMu >= 1n && bal("treasury").usds >= interestMu) {
+          const t2 = apply({ seq: seq + 1, ts: Date.now(), kind: "bond-interest", from: "treasury", to: "pool", asset: "USDS", amount: toF(interestMu), reason: `ריבית-איגרת-חוב-ריבונית (${sovPolicy.bondInterestBpsAnnual / 100}% שנתי · G32)` });
+          if (t2) { pool.usds += interestMu; syncPoolAccounts(); }
+        }
+      }
+      bondLastTs = Date.now();
+      // (ד) החזר-קרן: מעודף-תקציב-מעל-רצפת-הפעלה — עד-מחצית-העודף-פר-סבב (החוב-נפרע-מהכנסה-אמת)
+      const budgetNow = wageBudgetMu();
+      const debtNow = bondIssuedMu - bondRepaidMu;
+      if (budgetNow > fromF(sovPolicy.bondRepayRunwayUsds) && debtNow > 0n) {
+        const surplus = budgetNow - fromF(sovPolicy.bondRepayRunwayUsds);
+        let repayMu = surplus / 2n;
+        if (repayMu > debtNow) repayMu = debtNow;
+        if (repayMu >= fromF(0.01)) {
+          const t3 = apply({ seq: seq + 1, ts: Date.now(), kind: "bond-repay", from: "treasury", to: "pool", asset: "USDS", amount: toF(repayMu), reason: "החזר-קרן-איגרת-חוב-ריבונית-מהכנסה-אמת (G32)" });
+          if (t3) { pool.usds += repayMu; syncPoolAccounts(); }
+        }
+      }
+      // (ה) הנפקת-איגרת-חוב: כשהכספת-מתחת-לטריגר-והתקציב-מאוזן — מימון-עצמי-מהון-הבריכה.
+      // מכסות-חוק: חוב-כולל ≤ bondMaxUsds · ≤ bondMaxPoolSharePct מיתרת-הבריכה · קצירה-הדרגתית ≤ bondPerIssuanceUsds.
+      if (sovPolicy.bondEnabled && bal("treasury").usds < fromF(sovPolicy.bondTriggerTreasuryUsds) && wageBudgetMu() <= fromF(50)) {
+        const headroom = fromF(sovPolicy.bondMaxUsds) - (bondIssuedMu - bondRepaidMu);
+        const poolCap = (pool.usds * BigInt(sovPolicy.bondMaxPoolSharePct)) / 100n;
+        let issueMu = headroom < poolCap ? headroom : poolCap;
+        const perIssuance = fromF(sovPolicy.bondPerIssuanceUsds);
+        if (issueMu > perIssuance) issueMu = perIssuance;
+        if (issueMu >= fromF(1) && pool.usds >= issueMu) {
+          const t4 = apply({ seq: seq + 1, ts: Date.now(), kind: "bond-issue", from: "pool", to: "treasury", asset: "USDS", amount: toF(issueMu), reason: `הנפקת-איגרת-חוב-ריבונית · חוב-מחויב-בספר (G32 · ריבית ${sovPolicy.bondInterestBpsAnnual / 100}%)` });
+          if (t4) { pool.usds -= issueMu; syncPoolAccounts(); if (bondLastTs === 0) bondLastTs = Date.now(); }
+        }
+      }
     }
     // גל-85 · מווסת-אדפטיבי: 14-18 ניסיונות-בטיק (מהיר-על-ידי-קבלה בפועל, לא על-ידי-תקווה)
     const n = nBase + Math.floor(Math.random() * 5);
@@ -484,6 +547,10 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         const from = bal(t.from), to = bal(t.to);
         const field = t.asset === "USDS" ? "usds" : "saos";
         const amtMu = fromF(t.amount); // גל-87 · אריתמטיקה-זהה-מילה-במילה-ל-apply
+        // גל-111 · G32 · סנכרון-מקדים-כמו-בחיים: שורות-שנוגעות-בבריכה-כמשלם/מקבל — חשבון-הספר-מתיישר-מול-המודול-לפני-בדיקת-היתרה (דטרמיניזם-מלא)
+        if (t.kind === "dividend" || t.kind === "bond-issue" || t.kind === "bond-interest" || t.kind === "bond-repay" || (t.kind === "infra" && t.from === "pool")) {
+          bal("pool").usds = pool.usds; bal("pool").saos = pool.saos;
+        }
         if (t.kind === "ext-deposit") {
           // גל-109 · גל-27 · replay-משקף-apply (חוק-גל-86): מקור-חוץ — אין-חיוב,
           // זיכוי-יעד + מדידה + רישום-ref (הגנת-חלון-קריסה: בליעה-ב-boot-אחרי-replay
@@ -491,6 +558,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
           if (t.ref) rememberRef(String(t.ref));
           (to as any)[field] += amtMu;
           if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: replay-משקף-apply מילה-במילה
+          if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; // גל-111·G31
           extImportedMu += amtMu; extCount++;
         } else if ((from as any)[field] < amtMu) { seamIdx = i; seamFile = f; break outer; } // מצב-לא-עקבי-עם-הספר → תפר-כנה
         else if (t.kind === "stake") { from.saos -= amtMu; from.saosStaked += amtMu; }
@@ -509,6 +577,15 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
             else { pool.saos += amtMu; pool.usds -= fromF(t.outUsds); from.usds += fromF(t.outUsds); pool.feesSaos += feeMu; }
           } else { (to as any)[field] += amtMu; }
         }
+        // גל-111 · G32 · replay-משקף-את-חשבונאות-האוצר-ואת-שיקוף-מודול-הבריכה מילה-במילה ל-apply (חוק-הסימטריה)
+        if (t.kind === "ext-deposit") { /* נמדד-בענף-למעלה */ }
+        else if (t.kind === "dividend") { if (t.asset === "USDS") pool.usds -= amtMu; else pool.saos -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; incomeAccruedMu += amtMu; dividendPaidMu += amtMu; }
+        else if (t.kind === "bond-issue") { pool.usds -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondIssuedMu += amtMu; }
+        else if (t.kind === "bond-interest") { pool.usds += amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondInterestMu += amtMu; }
+        else if (t.kind === "bond-repay") { pool.usds += amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondRepaidMu += amtMu; }
+        else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") { pool.usds -= amtMu; incomeAccruedMu += amtMu; } else { pool.saos -= amtMu; incomeSaosMu += amtMu; } bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
+        else if (t.kind === "tax" || t.kind === "dex-fee") { if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; }
+        else if (t.kind === "salary") wagePaidMu += amtMu;
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
         byAccount[t.to] = (byAccount[t.to] ?? 0) + 1;
         byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;
@@ -607,6 +684,12 @@ function boot() {
       // גל-109 · שער-הזרימות-החוץ: המדידות-שורדות-דורות
       extImportedMu = fromF(Number(s.extImported ?? 0)); extCount = s.extCount ?? 0; extDedup = s.extDedup ?? 0; extBad = s.extBad ?? 0;
       extPoolImportedMu = fromF(Number(s.extPoolImported ?? 0)); // גל-109·G28: המדידה-שורדת-דורות
+      // גל-111 · G32/G31 · מדינת-האוצר-שורדת-דורות
+      incomeAccruedMu = fromF(Number(s.incomeAccrued ?? 0)); wagePaidMu = fromF(Number(s.wagePaid ?? 0)); incomeSaosMu = fromF(Number(s.incomeSaos ?? 0));
+      wageBlocked = Number(s.wageBlocked ?? 0);
+      dividendPaidMu = fromF(Number(s.dividendPaid ?? 0)); dividendRounds = Number(s.dividendRounds ?? 0);
+      bondIssuedMu = fromF(Number(s.bondIssued ?? 0)); bondRepaidMu = fromF(Number(s.bondRepaid ?? 0)); bondInterestMu = fromF(Number(s.bondInterest ?? 0));
+      bondLastTs = Number(s.bondLastTs ?? 0);
       // גל-87 · שימור-המדידה: attemptsTotal חייב לשרוד עלייה — בלי-זה acceptancePct מוצג
       // שלילי-מטופש (rejected היסטורי מול attempts צעירים). נמדד: -129163.1% אחרי-עלייה.
       if (typeof s.attemptsTotal === "number" && s.attemptsTotal > attemptsTotal) attemptsTotal = s.attemptsTotal;
@@ -755,12 +838,16 @@ function countsWindow(ms: number) { const cutoff = Date.now() - ms; let c = 0; f
 function snapshotSave() {
   if (sealing) return; // חוק-גל-82: אף-כתיבת-מדינה-בזמן-אטימה
   flush();
+  // גל-111 · דטרמיניזם-replay: חשבון-הבריכה-בספר-נסגר-מול-המודול-ברגע-השמירה (כמו-בסבב-האוצר)
+  syncPoolAccounts();
   // גל-87 · סידור-זהה-בייטים ל-snapshot ההיסטורי: µ¢ → מספרי-6-ספרות דרך-toF
   const obj = { v: 3, savedAt: Date.now(), seq, lastH,
     balances: Object.fromEntries([...balances].map(([k, v]) => [k, { usds: toF(v.usds), saos: toF(v.saos), saosStaked: toF(v.saosStaked) }])),
     pool: { saos: toF(pool.saos), usds: toF(pool.usds), feesUsds: toF(pool.feesUsds), feesSaos: toF(pool.feesSaos) },
     byKind, byAccount, rejected, errors, ledgerFileNo, ingestOk, ingestDedup, ingestFailed, ingestBad, attemptsTotal,
     extImported: toF(extImportedMu), extPoolImported: toF(extPoolImportedMu), extCount, extDedup, extBad, // גל-109·G28: מדידת-ניתוב-שורדת-דורות
+    incomeAccrued: toF(incomeAccruedMu), wagePaid: toF(wagePaidMu), wageBlocked, incomeSaos: toF(incomeSaosMu), // גל-111·G31-מומש
+    dividendPaid: toF(dividendPaidMu), dividendRounds, bondIssued: toF(bondIssuedMu), bondRepaid: toF(bondRepaidMu), bondInterest: toF(bondInterestMu), bondLastTs, // גל-111·G32
     seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
   const tmp = SNAP + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(obj));
@@ -787,6 +874,12 @@ const server = Bun.serve({
           runRatePerHour, runProjectedPerDay: runRatePerHour !== null ? +(runRatePerHour * 24).toFixed(0) : null,
           realEvents: { ingestOk, ingestDedup, ingestFailed, ingestBadPayload: ingestBad, droppedTx: ingestFailed },
           ext: { importedUsds: +toF(extImportedMu).toFixed(6), poolImportedUsds: +toF(extPoolImportedMu).toFixed(6), routingPoolPct: extPolicy.poolPct, count: extCount, dedup: extDedup, bad: extBad }, // גל-109 · שער-הזרימות-החוץ + G28 ניתוב
+          sov: { // גל-111 · G32 · מדינת-האוצר-הריבונית (G31-מומש)
+            law: "G32-חוק-הון-הריבון", wageBudgetUsds: +toF(wageBudgetMu()).toFixed(4),
+            incomeAccruedUsds: +toF(incomeAccruedMu).toFixed(4), incomeSaos: +toF(incomeSaosMu).toFixed(4), wagePaidUsds: +toF(wagePaidMu).toFixed(4), wageBlocked,
+            dividend: { paidUsds: +toF(dividendPaidMu).toFixed(4), rounds: dividendRounds, feeSharePct: sovPolicy.feeToTreasuryPct },
+            bond: { enabled: sovPolicy.bondEnabled, issuedUsds: +toF(bondIssuedMu).toFixed(4), repaidUsds: +toF(bondRepaidMu).toFixed(4), interestUsds: +toF(bondInterestMu).toFixed(4), outstandingUsds: +toF(bondIssuedMu - bondRepaidMu).toFixed(4), annualBps: sovPolicy.bondInterestBpsAnnual, maxUsds: sovPolicy.bondMaxUsds, maxPoolSharePct: sovPolicy.bondMaxPoolSharePct },
+          },
           byKind, rejected, errors, seq, lastH,
           throughput: { attempts: attemptsTotal, rejectedCount: rejected, acceptancePct: attemptsTotal > 0 ? +(((attemptsTotal - rejected) / attemptsTotal) * 100).toFixed(1) : null, governor: { nBase, cap: N_CAP, min: N_MIN, windowAcceptance: lastGovAcc } },
           supply: { saosTotal: SAOS_SUPPLY, saosStaked: toF([...balances.values()].reduce((a, b) => a + b.saosStaked, 0n)), usdsInPool: toF(pool.usds), saosInPool: toF(pool.saos) },

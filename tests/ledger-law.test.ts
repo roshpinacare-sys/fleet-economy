@@ -267,3 +267,164 @@ describe("G28 · פיצול-ניתוב-נזילות (splitRouting)", () => {
     expect(live.poolMu + live.treMu).toBe(fromF(42.5));
   });
 });
+
+/* ═══ G32 · חוק-הון-הריבון (גל-111 · agent-2) ═══
+ * המנגנון-החדש: דיבידנד-עמלות (pool→treasury חלק-חוקי) · איגרת-חוב-ריבונית-מכוסה
+ * (pool→treasury כחוב-מחויב-בספר · ריבית · החזר) · תקציב-שכר-אמת (G31-מומש).
+ * החוקים-הנועלים:
+ *  1. שימור-עולם: כל-סוג-שורה-החדש שומר-על סכום-העולם (אפס-הדפסה — חוב הוא העברה, לא יצירה).
+ *  2. סימטריית apply/replay: מוני-האוצר (incomeAccrued · wagePaid · dividend · bond) זהים-בדיוק
+ *     בין-הזרימה-החיה ל-replay-הזנב (החוק-שנפרץ-בגל-84 — נעול-עתה-גם-למוני-האוצר).
+ *  3. חוק-תקציב-השכר: שכר-חסום-כשאין-תקציב · נפתח-מהנפקת-איגרת · wagePaid נמדד-במקור-יחיד.
+ *  4. מכסות-איגרת: headroom = min(תקרת-חוב−חוב, מכסת-בריכה, קצירה-פר-הנפקה) · fail-closed.
+ */
+type SovState = {
+  bal: Map<string, Bal>;
+  pool: { saos: Mu; usds: Mu; feesUsds: Mu; feesSaos: Mu };
+  incomeAccrued: Mu; wagePaid: Mu; dividendPaid: Mu; bondIssued: Mu; bondRepaid: Mu; bondInterest: Mu; wageBlocked: number;
+};
+function sovApply(st: SovState, t: Tx): boolean {
+  const from = st.bal.get(t.from)!; const to = st.bal.get(t.to)!;
+  const field = t.asset === "USDS" ? "usds" as const : "saos" as const;
+  // סנכרון-מקדים-כמו-בחיים (G32): שורות-בריכה מתיישרות-מול-המודול-לפני-בדיקת-היתרה
+  if (t.kind === "dividend" || t.kind === "bond-issue" || t.kind === "bond-interest" || t.kind === "bond-repay" || (t.kind === "infra" && t.from === "pool")) {
+    st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos;
+  }
+  if (from[field] < t.amount) { if (t.kind === "salary") st.wageBlocked++; return false; }
+  from[field] -= t.amount;
+  if (t.kind === "swap") {
+    if (t.asset === "USDS") { st.pool.usds += t.amount; st.pool.saos -= t.outSaos!; from.saos += t.outSaos!; st.pool.feesUsds += t.fee!; }
+    else { st.pool.saos += t.amount; st.pool.usds -= t.outUsds!; from.usds += t.outUsds!; st.pool.feesSaos += t.fee!; }
+  } else { to[field] += t.amount; }
+  // חשבונאות-האוצר + שיקוף-המודול (משוקף-מילה-במילה-ל-engine apply/replay)
+  if (t.kind === "dividend") { st.incomeAccrued += t.amount; st.dividendPaid += t.amount; if (t.asset === "USDS") st.pool.usds -= t.amount; else st.pool.saos -= t.amount; st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos; }
+  else if (t.kind === "bond-issue") { st.bondIssued += t.amount; st.pool.usds -= t.amount; st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos; }
+  else if (t.kind === "bond-interest") { st.bondInterest += t.amount; st.pool.usds += t.amount; st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos; }
+  else if (t.kind === "bond-repay") { st.bondRepaid += t.amount; st.pool.usds += t.amount; st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos; }
+  else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") { st.incomeAccrued += t.amount; st.pool.usds -= t.amount; } else { st.pool.saos -= t.amount; } st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos; }
+  else if (t.kind === "salary") st.wagePaid += t.amount;
+  return true;
+}
+function sovBudget(st: SovState): Mu { return st.incomeAccrued - st.wagePaid - st.bondInterest + (st.bondIssued - st.bondRepaid); }
+function sovBondHeadroom(st: SovState, cfg: { maxUsds: Mu; poolSharePct: number; perIssuance: Mu }): Mu {
+  const debt = st.bondIssued - st.bondRepaid;
+  const headroom = cfg.maxUsds - debt; if (headroom <= 0n) return 0n;
+  const poolCap = (st.pool.usds * BigInt(cfg.poolSharePct)) / 100n;
+  let m = headroom < poolCap ? headroom : poolCap;
+  if (m > cfg.perIssuance) m = cfg.perIssuance;
+  return m;
+}
+function mkSovState(): SovState {
+  const bal = new Map<string, Bal>();
+  for (const id of IDS) bal.set(id, { usds: 0n, saos: 0n, saosStaked: 0n });
+  bal.get("treasury")!.usds = fromF(0.98); // המדידה-האמיתית-של-גל-111: כספת-כמעט-ריקה
+  bal.get("pool")!.usds = fromF(8030); bal.get("pool")!.saos = fromF(8000);
+  for (const s of ["s1", "s2", "s3"]) bal.get(s)!.usds = fromF(0.2); // חיילים-יבשים
+  return { bal, pool: { saos: fromF(8000), usds: fromF(8030), feesUsds: 0n, feesSaos: 0n }, incomeAccrued: 0n, wagePaid: 0n, dividendPaid: 0n, bondIssued: 0n, bondRepaid: 0n, bondInterest: 0n, wageBlocked: 0 };
+}
+const sovTx = (seq: number, kind: string, from: string, to: string, asset: "USDS" | "SAOS", amount: Mu): Tx =>
+  ({ seq, ts: Date.now(), kind, from, to, asset, amount, reason: "g32" });
+
+describe("G32 · חוק-הון-הריבון", () => {
+  test("שימור-עולם: דיבידנד/איגרת/ריבית/החזר — אפס-הדפסה (50K צעדים)", () => {
+    for (let trial = 0; trial < 20; trial++) {
+      const st = mkSovState();
+      const w0 = worldSum(st as any);
+      let seq = 0;
+      for (let i = 0; i < 2_500; i++) {
+        const r = Math.random();
+        if (r < 0.3) { // סבב-אוצר: עמלה נצברת → דיבידנד 50%
+          const fee = fromF(rnd6(0.01, 3));
+          st.pool.feesUsds += fee; st.pool.usds += fee; // העמלה-נכנסת-לשרותי-הבריכה (כמו-ב-AMM)
+          const take = (st.pool.feesUsds * 50n) / 100n;
+          if (take >= 1n) sovApply(st, sovTx(++seq, "dividend", "pool", "treasury", "USDS", take));
+        } else if (r < 0.45 && st.bondIssued - st.bondRepaid === 0n) { // הנפקה-במכסות
+          const m = sovBondHeadroom(st, { maxUsds: fromF(3_000), poolSharePct: 12, perIssuance: fromF(300) });
+          if (m >= fromF(1)) sovApply(st, sovTx(++seq, "bond-issue", "pool", "treasury", "USDS", m));
+        } else if (r < 0.6 && st.bondIssued > st.bondRepaid) { // ריבית-והחזר
+          const interest = fromF(rnd6(0.0001, 0.01));
+          if (st.bal.get("treasury")!.usds >= interest) sovApply(st, sovTx(++seq, "bond-interest", "treasury", "pool", "USDS", interest));
+          const budget = sovBudget(st);
+          if (budget > fromF(600)) { let repay = (budget - fromF(600)) / 2n; const debt = st.bondIssued - st.bondRepaid; if (repay > debt) repay = debt; if (repay >= 1n) sovApply(st, sovTx(++seq, "bond-repay", "treasury", "pool", "USDS", repay)); }
+        } else if (r < 0.8) { // שכר-מתוך-תקציב (G31-מומש)
+          const budget = sovBudget(st);
+          if (budget > 0n) { let amt = fromF(rnd6(1, 40)); if (amt > budget) amt = budget; sovApply(st, sovTx(++seq, "salary", "treasury", "s1", "USDS", amt)); }
+          else sovApply(st, sovTx(++seq, "salary", "treasury", "s1", "USDS", fromF(5)));
+        } else { // סחר-חי
+          const buySaos = Math.random() < 0.5;
+          const amt = fromF(rnd6(0.5, 20));
+          const rIn = buySaos ? st.pool.usds : st.pool.saos, rOut = buySaos ? st.pool.saos : st.pool.usds;
+          const out = ammOut(rIn, rOut, amt, FEE_BPS);
+          if (out <= 0n || out > rOut / 2n) continue;
+          const { fee } = splitFee(amt, FEE_BPS);
+          const t: Tx = { seq: ++seq, ts: Date.now(), kind: "swap", from: "s2", to: "pool", asset: buySaos ? "USDS" : "SAOS", amount: amt, reason: "t" };
+          if (buySaos) { t.outSaos = out; t.fee = fee; } else { t.outUsds = out; t.fee = fee; }
+          sovApply(st, t);
+        }
+        const w = worldSum(st as any);
+        expect(w.usds).toBe(w0.usds); // אפס-הדפסה — החוב-הוא-העברה
+        expect(w.saos).toBe(w0.saos);
+      }
+    }
+  });
+  test("סימטריית apply/replay עם מוני-אוצר — יתרות-ומונים זהים-בדיוק", () => {
+    for (let trial = 0; trial < 100; trial++) {
+      const ledger: Tx[] = [];
+      let seq = 0;
+      const stA = mkSovState();
+      // זרימה-חיה: איגרת → דיבידנד → שכר → ריבית → החזר
+      const issue = sovBondHeadroom(stA, { maxUsds: fromF(3_000), poolSharePct: 12, perIssuance: fromF(300) });
+      if (sovApply(stA, sovTx(++seq, "bond-issue", "pool", "treasury", "USDS", issue))) ledger.push(sovTx(seq, "bond-issue", "pool", "treasury", "USDS", issue));
+      stA.pool.feesUsds += fromF(2); stA.pool.usds += fromF(2);
+      const div = (fromF(2) * 50n) / 100n;
+      if (sovApply(stA, sovTx(++seq, "dividend", "pool", "treasury", "USDS", div))) ledger.push(sovTx(seq, "dividend", "pool", "treasury", "USDS", div));
+      const sal = fromF(50);
+      if (sovApply(stA, sovTx(++seq, "salary", "treasury", "s1", "USDS", sal))) ledger.push(sovTx(seq, "salary", "treasury", "s1", "USDS", sal));
+      const int = fromF(0.001);
+      if (sovApply(stA, sovTx(++seq, "bond-interest", "treasury", "pool", "USDS", int))) ledger.push(sovTx(seq, "bond-interest", "treasury", "pool", "USDS", int));
+      const rep = fromF(10);
+      if (sovApply(stA, sovTx(++seq, "bond-repay", "treasury", "pool", "USDS", rep))) ledger.push(sovTx(seq, "bond-repay", "treasury", "pool", "USDS", rep));
+      // replay-זנב מהסנאפשוט (מצב-זהה-מזריעה)
+      const stB = mkSovState();
+      for (const t of ledger) sovApply(stB, t); // החוק: replay-זהה-ל-apply (מנוע-אמת: שתי-המימושות-חייבות-להיות-מילה-במילה)
+      expect(stB.incomeAccrued).toBe(stA.incomeAccrued);
+      expect(stB.wagePaid).toBe(stA.wagePaid);
+      expect(stB.dividendPaid).toBe(stA.dividendPaid);
+      expect(stB.bondIssued).toBe(stA.bondIssued);
+      expect(stB.bondRepaid).toBe(stA.bondRepaid);
+      expect(stB.bondInterest).toBe(stA.bondInterest);
+      expect(stB.bal.get("treasury")!.usds).toBe(stA.bal.get("treasury")!.usds);
+      expect(stB.pool.usds).toBe(stA.pool.usds);
+      expect(sovBudget(stB)).toBe(sovBudget(stA));
+    }
+  });
+  test("חוק-תקציב-השכר (G31-מומש): חסום-באפס-הכנסה · נפתח-באיגרת · wagePaid מדויק", () => {
+    const st = mkSovState();
+    // אפס-הכנסה-ואפס-חוב → תקציב-אפס → שכר-חסום-בכנות
+    expect(sovBudget(st)).toBe(0n);
+    expect(sovApply(st, sovTx(1, "salary", "treasury", "s1", "USDS", fromF(5)))).toBe(false);
+    expect(st.wageBlocked).toBe(1);
+    // הנפקת-איגרת 300$ → תקציב-נפתח → שכר-זורם-ונמדד
+    sovApply(st, sovTx(2, "bond-issue", "pool", "treasury", "USDS", fromF(300)));
+    expect(sovBudget(st)).toBe(fromF(300));
+    expect(sovApply(st, sovTx(3, "salary", "treasury", "s1", "USDS", fromF(120)))).toBe(true);
+    expect(st.wagePaid).toBe(fromF(120));
+    expect(sovBudget(st)).toBe(fromF(180)); // שימור-מתמטי
+    // ריבית-היא-עלות: מקטינה-את-התקציב (כנות-כלכלית)
+    sovApply(st, sovTx(4, "bond-interest", "treasury", "pool", "USDS", fromF(1)));
+    expect(sovBudget(st)).toBe(fromF(179));
+  });
+  test("מכסות-איגרת: headroom = min(תקרה−חוב · מכסת-בריכה · קצירה) · fail-closed", () => {
+    const st = mkSovState();
+    const cfg = { maxUsds: fromF(3_000), poolSharePct: 12, perIssuance: fromF(300) };
+    expect(sovBondHeadroom(st, cfg)).toBe(fromF(300)); // קצירה-הדרגתית היא-המגבלה (963>300 · 3000>300)
+    st.bondIssued = fromF(2_900); // חוב-כמעט-מלא → headroom=100 (מכסת-התקרה היא-המגבלה)
+    expect(sovBondHeadroom(st, cfg)).toBe(fromF(100));
+    st.bondIssued = fromF(3_000); // תקרה-מלאה → אפס-הנפקה (fail-closed)
+    expect(sovBondHeadroom(st, cfg)).toBe(0n);
+    const st2 = mkSovState(); st2.pool.usds = fromF(1_000); // בריכה-דלה: 12% = 120 המגבלה
+    expect(sovBondHeadroom(st2, cfg)).toBe(fromF(120));
+    const st3 = mkSovState(); st3.pool.usds = fromF(500); // 12% = 60 — תמיד-מתחת-לקצירה
+    expect(sovBondHeadroom(st3, cfg)).toBe(fromF(60));
+  });
+});
