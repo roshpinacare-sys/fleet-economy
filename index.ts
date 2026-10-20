@@ -822,7 +822,10 @@ function boot() {
 function auditFullReplay() {
   const fold = new Map<string, { usds: bigint; saos: bigint; saosStaked: bigint }>();
   const g = (id: string) => { let b = fold.get(id); if (!b) { b = { usds: 0n, saos: 0n, saosStaked: 0n }; fold.set(id, b); } return b; };
-  let pUsds = 0n, pSaos = 0n;
+  // גל-114·G35·תיקון-באג-עצמי: הקיפול-הראשון-מנכה-את-הבריכה-פעמיים (דרך-המסלול-הגנרי-וגם-הסתעפות-הסוג)
+  // ⇒ פער-פול-חוזר-בכל-boot. הסמנטיקה-הנכונה: ל-כל-חשבון-כולל-הבריכה — חשבונאות-כפולה-גנרית;
+  // רק-החלפות מזיזות-את-הבריכה-כמודול-AMM (כמו-בחיים). רשומות-תיקון-גנזיות (ext-deposit/reconcile-adjustment)
+  // נספרות-כאן — כך-הקיפול-כולל-את-ההשלמות-ומגיע-לפריטה-מלאה.
   const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
   for (const f of files) {
     const lines = fs.readFileSync(path.join(STATE_DIR, f), "utf8").split("\n").filter(Boolean);
@@ -830,50 +833,54 @@ function auditFullReplay() {
       let t: any; try { t = JSON.parse(line); } catch { continue; }
       const field = t.asset === "USDS" ? "usds" : "saos";
       const amtMu = fromF(Number(t.amount) || 0);
+      const poolB = g("pool");
       if (t.kind === "ext-deposit") { (g(t.to) as any)[field] += amtMu; continue; }
+      if (t.kind === "reconcile-adjustment") { (g(t.to) as any)[field] -= amtMu; continue; } // תיקון-גנזי-שלילי-מתועד (agent-2 G35): מוריד-מתצוגת-הלדגר-של-היעד
       if (t.kind === "stake") { const fb = g(t.from); fb.saos -= amtMu; fb.saosStaked += amtMu; continue; }
       if (t.kind === "unstake") { const fb = g(t.from); if (fb.saosStaked < amtMu) continue; fb.saosStaked -= amtMu; g(t.to).saos += amtMu; continue; }
       const fb = g(t.from), tb = g(t.to);
       (fb as any)[field] -= amtMu;
       if (t.kind === "swap") {
-        if (t.asset === "USDS") { pUsds += amtMu; pSaos -= fromF(Number(t.outSaos) || 0); fb.saos += fromF(Number(t.outSaos) || 0); }
-        else { pSaos += amtMu; pUsds -= fromF(Number(t.outUsds) || 0); fb.usds += fromF(Number(t.outUsds) || 0); }
+        if (t.asset === "USDS") { poolB.usds += amtMu; poolB.saos -= fromF(Number(t.outSaos) || 0); fb.saos += fromF(Number(t.outSaos) || 0); }
+        else { poolB.saos += amtMu; poolB.usds -= fromF(Number(t.outUsds) || 0); fb.usds += fromF(Number(t.outUsds) || 0); }
       } else {
         (tb as any)[field] += amtMu;
-        if (t.kind === "dividend") { if (t.asset === "USDS") pUsds -= amtMu; else pSaos -= amtMu; }
-        else if (t.kind === "bond-issue") pUsds -= amtMu;
-        else if (t.kind === "bond-interest" || t.kind === "bond-repay") pUsds += amtMu;
-        else if (t.kind === "infra" && t.from === "pool") { if (t.asset === "USDS") pUsds -= amtMu; else pSaos -= amtMu; }
       }
     }
   }
-  return { fold, poolUsds: pUsds, poolSaos: pSaos };
+  return { fold };
 }
 
 let replayParity = false; // G35 · נקבע-ב-boot (אמת-מדידה, לא-טענה) · חשוף-ב-/verify
 function genesisReconcile() {
   const a = auditFullReplay();
   const EPS = 0.01;
-  const deltas: { id: string; delta: number }[] = [];
+  const deltas: { id: string; delta: number; kind: string }[] = [];
   const seen = new Set<string>();
   const push = (id: string, liveMu: bigint, foldMu: bigint) => {
     const d = +toF(liveMu - foldMu).toFixed(6);
     if (Math.abs(d) <= EPS) return;
-    if (d < 0) { console.log(`[fleet-economy] G35-reconcile: אזהרה — קיפול>${id} מעל-החי (${d}) — מדווח-בכנות, לא-נוגעים`); return; }
-    if (!seen.has(id)) { seen.add(id); deltas.push({ id, delta: d }); }
+    if (!seen.has(id)) { seen.add(id); deltas.push({ id, delta: Math.abs(d), kind: d > 0 ? "ext-deposit" : "reconcile-adjustment" }); }
   };
-  push("pool", pool.usds, a.poolUsds);
-  for (const [id, lb] of a.fold) { if (id === "pool") continue; push(id, bal(id).usds, lb.usds); }
-  for (const [id, b] of balances) { if (a.fold.has(id) || id === "pool") continue; push(id, b.usds, 0n); }
+  // גל-114·G35·תיקון: הבריכה-נמדדת-כמו-כל-חשבון — bal("pool") (המסונכרן-מהמודול), לא-המודול-עצמו
+  for (const [id, lb] of a.fold) push(id, bal(id).usds, lb.usds);
+  for (const [id, b] of balances) { if (a.fold.has(id)) continue; push(id, b.usds, 0n); }
   if (!deltas.length) { replayParity = true; return { reconciled: false, parity: true, deltas: [] }; }
   let h = lastH; let s = seq;
   const out: string[] = [];
-  for (const { id, delta } of deltas) {
-    const t = { seq: s + 1, ts: Date.now(), kind: "ext-deposit", from: "ext:genesis", to: id, asset: "USDS", amount: delta, reason: "השלמת-פער-גנזית (G35): קיפול-מלא-של-הלדגר הראה-פער-מול-המצב-החי — מתועד-כאן · אפס-אפקט-חי · מקור-חוץ-חוקי", ref: `genesis-reconcile-v1-${id}` };
+  for (const { id, delta, kind } of deltas) {
+    const isCorr = kind === "reconcile-adjustment";
+    const ref = isCorr ? `genesis-reconcile-corr-v2-${id}` : `genesis-reconcile-v1-${id}`;
+    if (seenRefs.has(ref)) continue; // אידמפוטנטיות-כפולה: גם-דרך-הפריטה-וגם-דרך-הrefs
+    const t = { seq: s + 1, ts: Date.now(), kind, from: "ext:genesis", to: id, asset: "USDS", amount: delta, reason: isCorr
+      ? "תיקון-רשומות-השלמה-כפולות שנכתבו על-ידי מאמת-הפער הראשון של-G35 (באג-כפילות-בריכה, נמדד-ותוקן-על-ידי-agent-2) — מוריד-את-העודף-מתצוגת-הלדגר · אפס-אפקט-חי"
+      : "השלמת-פער-גנזית (G35): קיפול-מלא-של-הלדגר הראה-פער-מול-המצב-החי — מתועד-כאן · אפס-אפקט-חי · מקור-חוץ-חוקי", ref };
     h = createHash("sha256").update(JSON.stringify({ ...t, prev: h })).digest("hex").slice(0, 32);
     out.push(JSON.stringify({ ...t, h }));
+    rememberRef(ref);
     s = t.seq;
   }
+  if (!out.length) { replayParity = false; return { reconciled: false, parity: false, deltas }; }
   fs.appendFileSync(LEDGER, out.join("\n") + "\n");
   seq = s; lastH = h;
   replayParity = true;
