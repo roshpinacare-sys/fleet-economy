@@ -1,5 +1,9 @@
-# חסינות-הספר-החי (W121 · agent-2): איחוד-בלי-סימני-קונפליקט —
-# מיזוג-גיט-מעולם-לא-יכתוב-שוב ">>>>>>> " לתוך-הספר-החי (נמדד: הרעל-גרם-להסגר-26MB-וזריעה-מחדש-ב-09:43)
-state/ledger.jsonl merge=union
+# חסינות-הספר-החי (W121 · גל-115 · agent-2):
+# ledger.jsonl + snapshot.json = שרשרת-האשים-סדרתית/מצב-חי — כל-מיזוג-חוץ-מנצח-חוץ-משבש-אותם
+# (נמדד-פעמיים: סימני-קונפליקט-גל-114 · קונקטנציית-union-גל-115 — שניהם-שברו-brokenAt=1).
+# חוק: הכותב-החי-היחיד-בסנדבוקס-זה — ours תמיד; גרסאות-ענן-משומרות-בהיסטוריה.
+state/ledger.jsonl merge=ours
+state/snapshot.json merge=ours
+# append-only-יומנים: union-מאושר (איחוד-בלי-סימנים, סדר-פחות-קריטי)
 state/seal-log.jsonl merge=union
 state/ext-flows.jsonl merge=union
