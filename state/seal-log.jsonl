@@ -35,6 +35,15 @@ use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' i
 {"ts":"2026-10-21T08:58:28.240Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
 {"ts":"2026-10-21T08:58:28.976Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
 {"ts":"2026-10-21T08:58:28.976Z","action":"sweep-done"}
+{"ts":"2026-10-21T09:15:09.736Z","repo":"my-project","action":"synced","how":"union","out":"resolved=3"}
+{"ts":"2026-10-21T09:15:09.898Z","repo":"my-project","action":"state-custody-restore","brokenAt":1,"restored":true}
+{"ts":"2026-10-21T09:15:11.935Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   efd9028..84b2975  HEAD -> main"}
+{"ts":"2026-10-21T09:15:13.971Z","repo":"fleet-economy","action":"sync-union-fail","out":"fail:state/ledger.jsonl:Error: no-sides"}
+{"ts":"2026-10-21T09:15:19.121Z","repo":"fleet-economy","action":"sync-union-fail","out":"fail:state/ledger.jsonl:Error: no-sides"}
+{"ts":"2026-10-21T09:15:19.842Z","repo":"fleet-economy","action":"push-fail","out":"HEAD -> main (non-fast-forward)\nerror: failed to push some refs to 'https://github.com/roshpinacare-sys/fleet-economy.git'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' in 'git push --help' for details."}
+{"ts":"2026-10-21T09:15:20.759Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
+{"ts":"2026-10-21T09:15:21.494Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
+{"ts":"2026-10-21T09:15:21.494Z","action":"sweep-done"}
 {"ts":"2026-10-21T09:08:09.242Z","repo":"my-project","action":"synced","how":"union","out":"resolved=1"}
 {"ts":"2026-10-21T09:08:09.419Z","repo":"my-project","action":"state-custody-restore","brokenAt":1,"restored":true}
 {"ts":"2026-10-21T09:08:11.093Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   e10bc29..bc2aeb1  HEAD -> main"}
