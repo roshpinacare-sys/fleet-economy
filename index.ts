@@ -888,6 +888,14 @@ function boot() {
       if (!balances.has("treasury")) throw new Error("snapshot corrupt");
       // ריפוי-עצמי בעלייה (גל-82 · שורש-התפר): אם-הספר-על-הדיסק-תפור (תפר-מיזוג-גיט
       // בין-שרשרת-מקומית-לענן) — אין-המשך-על-ספר-שבור: הסגר-כנה + זריעה-חדשה.
+      // גל-49 · G49 · ריפוי-שרשרת-בעלייה: לפני-שבודקים — מאחזים. chain-reconcile משחזר
+      // את השרשרת-החיה לפי seq-מונוטוני (אפס-מחיקה, הסגר-בלבד) — מעלה-את-סולם-הריפוי
+      // מעל החיתוך-העיוור והרג'נזיס. Idempotent · זול · fail-open (הסולם-הישן-מתחת).
+      try {
+        const rec = Bun.spawnSync(["bun", path.join(import.meta.dir, "chain-reconcile.mjs"), "--state", STATE_DIR, "--loop", "1"], { timeout: 90_000 });
+        if (rec.exitCode === 0) console.log(`[fleet-economy] boot-chain-reconcile: ${rec.stdout.toString().trim().slice(0, 160)}`);
+        else console.log(`[fleet-economy] boot-chain-reconcile: rc=${rec.exitCode} — ממשיך-בסולם-הריפוי-ההיסטורי`);
+      } catch { /* כנה — הסולם-הישן-עוד-שם */ }
       const v = verifyChain();
       if (!v.ok) {
         // גל-84 · ריפוי-תפר-בוט-כפול: אם-השבר-הוא-זנב-מזלג (קריסה-אחרי-flush-לפני-סנאפשוט,
