@@ -1,16 +1,26 @@
 {
   "schema": "sovereign-builder-state/v1",
-  "createdAt": "2026-10-21T16:01:23.790Z",
+  "createdAt": "2026-10-21T15:52:48.912Z",
   "backlog": [],
-  "growthLogCount": 1,
+  "growthLogCount": 4,
   "acts": 0,
-  "metrics": 1,
+  "metrics": 2,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 0,
+  "seals": 1,
   "sealFailures": 0,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-21T16:01:24.284Z",
-  "lastVerdict": "פעימה-הושלמה"
+  "lastAt": "2026-10-21T16:08:37.117Z",
+  "lastVerdict": "פעימה-הושלמה",
+  "toolStats": {
+    "verify_chain": {
+      "runs": 1,
+      "ok": 0,
+      "fail": 1,
+      "lastOkAt": null,
+      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_",
+      "lastAt": "2026-10-21T16:08:37.116Z"
+    }
+  }
 }
