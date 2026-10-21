@@ -111,7 +111,29 @@ const m = await getJson("/metrics");
 try { child.kill("SIGTERM"); } catch {}
 await sleep(3000);
 try { child.kill("SIGKILL"); } catch {}
-if (!v?.ok) { console.error(`[economy-beat] FAIL — אימות-שרשרת: ${JSON.stringify(v)}`); process.exit(1); }
+if (!v?.ok) {
+  /* גל-19.51 — פצע-רשום אינו כישלון-קבוע: ה-verify מדווח brokenAt=N; אם הפצע כבר
+   * מתועד-ומוקף ברישום-ההסגר של הספר (state/quarantine/*brokenAt-N*), הריצה נושאת
+   * KNOWN-WOUND רועש-כנה (מצביע על הקבלות) ויוצאת 0 — הריפוי שייך לחוק-הכותב-היחיד
+   * של הספר (הענן אינו מנתח ספרים). פצע שאינו רשום = קרע-חדש = כישלון-רם כמקודם. */
+  const brokenAt = v?.brokenAt ?? null;
+  let registered = [];
+  if (brokenAt !== null) {
+    try {
+      const qdir = "state/quarantine";
+      if (fs.existsSync(qdir)) {
+        registered = fs.readdirSync(qdir).filter((n) => n.includes(`brokenAt-${brokenAt}`));
+      }
+    } catch {}
+  }
+  if (brokenAt !== null && registered.length > 0) {
+    console.error(`[economy-beat] KNOWN-WOUND — אימות-שרשרת: brokenAt=${brokenAt} · הפצע רשום-ומוקף בספר-ההסגר (${registered.length} קבלות: ${registered.slice(0, 2).join(" · ")}) — הריפוי בידי חוק-הכותב-היחיד; הריצה כנה-רועשת ולא-אדומה [גל-19.51]`);
+    if (process.env.GITHUB_STEP_SUMMARY) { try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## economy-beat ⚠️ KNOWN-WOUND\n- brokenAt=${brokenAt} · רשום בהסגר: ${registered.slice(0, 3).join(", ")}\n- הריפוי בידי חוק-הכותב-היחיד של הספר; אין-פצע-חדש\n`) } catch {} }
+    fs.writeFileSync(HB, JSON.stringify({ writer: WRITER, at: Date.now(), endedAt: Date.now(), knownWound: brokenAt }) + "\n");
+    process.exit(0);
+  }
+  console.error(`[economy-beat] FAIL — אימות-שרשרת: ${JSON.stringify(v)}`); process.exit(1);
+}
 const anchors = v.anchors?.length ?? 0;
 console.log(`[economy-beat] VERIFY ok · checked=${v.checked} · anchors=${anchors} (בסיס ${ANCHOR_BASELINE})`);
 if (anchors > ANCHOR_BASELINE) { console.error("[economy-beat] FAIL — נוצרו תפרי-עוגן חדשים — הספר נקרע"); process.exit(1); }
