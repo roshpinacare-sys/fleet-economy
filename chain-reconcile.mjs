@@ -82,14 +82,16 @@ function onePass() {
     if (!cands.length) continue; // פער-מוחלט — ייפתר-כעוגן-בשורה-הבאה
     let pick = null;
     for (const c of cands) {
-      if (sha32(bodyOf(c, prev)) === c.h) { pick = c; break; } // סדר-קובץ = עדיפות-יציבה
+      const { h: _h, ...cRest } = c; // הגוף-בלי-h — בדיוק-כמו-sealTx
+      if (sha32(JSON.stringify({ ...cRest, prev })) === c.h) { pick = c; break; } // סדר-קובץ = עדיפות-יציבה
     }
     if (!pick && cands.length === 1) pick = cands[0]; // פער-קודם → עוגן-הצטרפות-יחיד
     if (!pick) { orphans.push(...cands); continue; }   // ריבוי-לא-משרשר → fail-honest להסגר
     if (pick !== cands[0] || cands.length > 1) {
       for (const c of cands) if (c !== pick) orphans.push(c);
     }
-    const strict = sha32(bodyOf(pick, prev)) === pick.h;
+    const { h: _h2, ...pRest } = pick;
+    const strict = sha32(JSON.stringify({ ...pRest, prev })) === pick.h;
     if (!strict) anchors++;
     kept.push(JSON.stringify(pick));
     prev = pick.h;
