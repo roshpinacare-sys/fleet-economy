@@ -643,6 +643,15 @@ use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' i
 {"ts":"2026-10-21T22:20:51.805Z","repo":"my-project","action":"state-custody-restore","brokenAt":1,"restored":true}
 {"ts":"2026-10-21T22:20:53.524Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   5e96e6b..1e1523d  HEAD -> main"}
 {"ts":"2026-10-21T22:20:54.513Z","repo":"fleet-economy","action":"synced","how":"merge","out":"Already up to date."}
+{"ts":"2026-10-21T22:27:07.133Z","repo":"my-project","action":"synced","how":"union","out":"resolved=1"}
+{"ts":"2026-10-21T22:27:07.150Z","repo":"my-project","action":"state-custody-restore","brokenAt":4454,"restored":true}
+{"ts":"2026-10-21T22:27:08.846Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   0db8872..f585e4c  HEAD -> main"}
+{"ts":"2026-10-21T22:27:09.764Z","repo":"fleet-economy","action":"sync-union","out":"resolved=0"}
+{"ts":"2026-10-21T22:27:14.463Z","repo":"fleet-economy","action":"sync-union","out":"resolved=0"}
+{"ts":"2026-10-21T22:27:15.185Z","repo":"fleet-economy","action":"push-fail","out":"HEAD -> main (non-fast-forward)\nerror: failed to push some refs to 'https://github.com/roshpinacare-sys/fleet-economy.git'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' in 'git push --help' for details."}
+{"ts":"2026-10-21T22:27:16.175Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
+{"ts":"2026-10-21T22:27:16.916Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
+{"ts":"2026-10-21T22:27:16.916Z","action":"sweep-done"}
 {"ts":"2026-10-21T22:20:59.023Z","repo":"fleet-economy","action":"synced","how":"merge","out":"Already up to date."}
 {"ts":"2026-10-21T22:20:59.702Z","repo":"fleet-economy","action":"push-fail","out":"remote: Invalid username or token. Password authentication is not supported for Git operations.\nfatal: Authentication failed for 'https://github.com/roshpinacare-sys/fleet-economy.git/'"}
 {"ts":"2026-10-21T22:21:00.661Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
@@ -666,3 +675,6 @@ use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' i
 {"ts":"2026-10-21T22:40:18.711Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
 {"ts":"2026-10-21T22:40:18.711Z","action":"sweep-done"}
 {"ts":"2026-10-21T22:41:46.339Z","action":"runtime-deep-trim-heal","brokenAt":1,"keptLines":4454,"trimmedLines":40231}
+{"ts":"2026-10-21T22:37:06.764Z","repo":"my-project","action":"synced","how":"merge","out":"Already up to date."}
+{"ts":"2026-10-21T22:37:06.795Z","repo":"my-project","action":"state-custody-restore","brokenAt":1,"restored":true}
+{"ts":"2026-10-21T22:37:08.452Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   b931c5f..7a72284  HEAD -> main"}
