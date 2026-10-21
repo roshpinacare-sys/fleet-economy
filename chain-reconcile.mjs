@@ -93,7 +93,9 @@ async function onePass() {
 
   const snap = readSnapshot();
   const tip = await writerTip();
-  const tipH = tip?.lastH ?? rawLines[rawLines.length - 1]?.match(/"h":"([0-9a-f]{32})"/)?.[1];
+  // הטיפ-החי-בזיכרון-עשוי-שלא-להיות-מפולש-עדיין (flush כל-64) — נופלים-לטיפ-המפולש-החי-בקובץ
+  const tailH = rawLines[rawLines.length - 1]?.match(/"h":"([0-9a-f]{32})"/)?.[1];
+  const tipH = tip?.lastH ?? tailH;
   if (!tipH) return { ok: false, why: "no-tip" };
 
   // מפת h→טרנזקציה (עצמית-עקביות בלבד) — חסין-לסדר-קובץ; עותק-מוקדם-קובע
@@ -106,7 +108,9 @@ async function onePass() {
     else if ((order.get(t.h) ?? Infinity) > i) order.set(t.h, i);
   }
 
-  const { chain, stopReason } = walkBack(tipH, byH);
+  let effectiveTip = tipH;
+  if (!byH.has(tipH) && tailH && byH.has(tailH)) effectiveTip = tailH; // הטיפ-עוד-לא-מפולש — הולכים-מהמפולש
+  const { chain, stopReason } = walkBack(effectiveTip, byH);
   if (!chain.length) return { ok: false, why: stopReason, tipH: tipH.slice(0, 8) };
 
   const chainSet = new Set(chain.map((t) => t.h));
