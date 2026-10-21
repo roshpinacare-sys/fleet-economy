@@ -747,6 +747,16 @@ use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' i
 {"ts":"2026-10-21T23:17:06.771Z","repo":"my-project","action":"synced","how":"merge","out":"Already up to date."}
 {"ts":"2026-10-21T23:17:06.828Z","repo":"my-project","action":"state-custody-restore","brokenAt":1,"restored":true}
 {"ts":"2026-10-21T23:17:08.446Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   9278bef..8a823cb  HEAD -> main"}
+{"ts":"2026-10-21T23:30:06.827Z","repo":"my-project","action":"synced","how":"union","out":"resolved=1"}
+{"ts":"2026-10-21T23:30:06.924Z","repo":"my-project","action":"state-custody-restore","brokenAt":1,"restored":true}
+{"ts":"2026-10-21T23:30:08.594Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   b2f117d..853b756  HEAD -> main"}
+{"ts":"2026-10-21T23:30:12.805Z","repo":"fleet-economy","action":"sync-union","out":"resolved=0"}
+{"ts":"2026-10-21T23:30:19.164Z","repo":"fleet-economy","action":"sync-union","out":"resolved=0"}
+{"ts":"2026-10-21T23:30:19.996Z","repo":"fleet-economy","action":"push-fail","out":"HEAD -> main (non-fast-forward)\nerror: failed to push some refs to 'https://github.com/roshpinacare-sys/fleet-economy.git'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' in 'git push --help' for details."}
+{"ts":"2026-10-21T23:30:20.998Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
+{"ts":"2026-10-21T23:30:21.744Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
+{"ts":"2026-10-21T23:30:21.744Z","action":"sweep-done"}
+{"ts":"2026-10-21T23:32:03.169Z","action":"runtime-deep-trim-heal","brokenAt":1,"keptLines":7678,"trimmedLines":84036}
 {"ts":"2026-10-21T23:17:09.968Z","repo":"fleet-economy","action":"synced","how":"merge","out":"Already up to date."}
 {"ts":"2026-10-21T23:17:14.065Z","repo":"fleet-economy","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/fleet-economy.git\n   d812ef8..e305d72  HEAD -> main"}
 {"ts":"2026-10-21T23:17:15.079Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
