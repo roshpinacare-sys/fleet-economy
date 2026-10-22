@@ -1,16 +1,50 @@
 {
   "schema": "sovereign-builder-state/v1",
-  "createdAt": "2026-10-22T08:02:41.232Z",
+  "createdAt": "2026-10-21T22:16:29.898Z",
   "backlog": [],
-  "growthLogCount": 1,
-  "acts": 0,
-  "metrics": 1,
+  "growthLogCount": 106,
+  "acts": 12,
+  "metrics": 36,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 0,
-  "sealFailures": 0,
+  "seals": 33,
+  "sealFailures": 2,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-22T08:02:41.427Z",
-  "lastVerdict": "פעימה-הושלמה"
+  "lastAt": "2026-10-22T06:00:39.034Z",
+  "lastVerdict": "פעימה-הושלמה",
+  "toolStats": {
+    "verify_chain": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-21T22:19:52.276Z",
+      "lastResult": "ok=True checked=2210 anchors=[]",
+      "lastAt": "2026-10-21T22:19:52.276Z"
+    },
+    "ledger_stats": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-21T22:34:55.410Z",
+      "lastResult": "ok=True checked=11700 seqFirst=1 seqLast=10242",
+      "lastAt": "2026-10-21T22:34:55.410Z"
+    },
+    "price_report": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-21T22:49:00.480Z",
+      "lastResult": "ok=True seq=17658 price=3.670445 fees=0.38216 treasuryUsds=60493.42284",
+      "lastAt": "2026-10-21T22:49:00.480Z"
+    },
+    "tools_selftest": {
+      "runs": 1,
+      "ok": 0,
+      "fail": 1,
+      "lastOkAt": null,
+      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_s",
+      "lastAt": "2026-10-21T23:05:05.932Z"
+    }
+  }
 }
