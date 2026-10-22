@@ -2,16 +2,16 @@
   "schema": "sovereign-builder-state/v1",
   "createdAt": "2026-10-22T02:02:54.260Z",
   "backlog": [],
-  "growthLogCount": 40,
-  "acts": 0,
-  "metrics": 14,
+  "growthLogCount": 55,
+  "acts": 4,
+  "metrics": 19,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 13,
+  "seals": 18,
   "sealFailures": 0,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-22T05:20:39.846Z",
+  "lastAt": "2026-10-22T06:34:50.111Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "verify_chain": {
@@ -21,6 +21,30 @@
       "lastOkAt": null,
       "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_",
       "lastAt": "2026-10-22T02:19:53.726Z"
+    },
+    "ledger_stats": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-22T06:04:45.916Z",
+      "lastResult": "ok=True checked=16338 seqFirst=1 seqLast=16338",
+      "lastAt": "2026-10-22T06:04:45.916Z"
+    },
+    "price_report": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-22T06:20:49.612Z",
+      "lastResult": "ok=True seq=24965 price=3.915053 fees=0.355122 treasuryUsds=60544.891456",
+      "lastAt": "2026-10-22T06:20:49.612Z"
+    },
+    "tools_selftest": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-22T06:34:50.110Z",
+      "lastResult": "ok=True tools=3 used=3",
+      "lastAt": "2026-10-22T06:34:50.110Z"
     }
   }
 }

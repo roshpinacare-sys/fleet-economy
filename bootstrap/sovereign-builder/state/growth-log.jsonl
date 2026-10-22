@@ -40,3 +40,18 @@
 {"at":"2026-10-22T05:20:39.733Z","kind":"metric","ledgerSeq":140358,"ledgerLines":4247,"beatSeq":null,"tx":null,"price":null}
 {"at":"2026-10-22T05:20:39.814Z","kind":"playbook","tool":"verify_chain"}
 {"at":"2026-10-22T05:20:39.846Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_chain.py /home/z/aud"}
+{"at":"2026-10-22T05:34:42.536Z","kind":"metric","ledgerSeq":147841,"ledgerLines":11730,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-22T05:34:42.580Z","kind":"playbook","tool":"verify_chain"}
+{"at":"2026-10-22T05:34:42.604Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_chain.py /home/z/aud"}
+{"at":"2026-10-22T05:50:46.060Z","kind":"metric","ledgerSeq":8652,"ledgerLines":8652,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-22T05:50:46.132Z","kind":"playbook","tool":"verify_chain"}
+{"at":"2026-10-22T05:50:46.374Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=8659 anchors=[]"}
+{"at":"2026-10-22T06:04:45.797Z","kind":"metric","ledgerSeq":16338,"ledgerLines":16338,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-22T06:04:45.832Z","kind":"playbook","tool":"ledger_stats"}
+{"at":"2026-10-22T06:04:45.916Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=16338 seqFirst=1 seqLast=16338"}
+{"at":"2026-10-22T06:20:49.511Z","kind":"metric","ledgerSeq":25252,"ledgerLines":25252,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-22T06:20:49.589Z","kind":"playbook","tool":"price_report"}
+{"at":"2026-10-22T06:20:49.612Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=24965 price=3.915053 fees=0.355122 treasuryUsds=60544.891456"}
+{"at":"2026-10-22T06:34:49.034Z","kind":"metric","ledgerSeq":32790,"ledgerLines":32790,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-22T06:34:49.075Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-22T06:34:50.111Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"ok=True tools=3 used=3"}
