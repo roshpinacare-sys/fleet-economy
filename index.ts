@@ -814,6 +814,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
       }
     }
     if (trimmed) console.log(`[fleet-economy] boot-tail-fork: תפר-בשורה-${seamIdx} — הזנב-להסגר, הקידומת-חיה`);
+    if (replayed > 0) lastReplayLive = null; // גל-63: שורות-נשחזרו-לזיכרון — הקיפול-חייב-קיפול-טרי
     return { replayed, trimmed };
   } catch { return { replayed: 0, trimmed: false }; }
 }
@@ -880,6 +881,7 @@ function deepTrimHeal(): { ok: boolean; keptLines: number; trimmedLines: number;
     }
     // כתיבת-הקידומת-החיה-במקום-קובץ-השבר (מילה-במילה — אפס-שכתוב-שורות-שנשמרו)
     fs.writeFileSync(path.join(STATE_DIR, breakFile), prefix.length ? prefix.map((p) => p.line).join("\n") + "\n" : "");
+    lastReplayLive = null; // גל-63: המצב-נחתך — מטמון-ה-replay-שלפני-החיתוך אינו-אמת
     return { ok: true, keptLines: prefix.length, trimmedLines, brokenAt, lastKeptSeq };
   } catch { return { ok: false, keptLines: 0, trimmedLines: 0, brokenAt: null, lastKeptSeq: 0 }; }
 }
@@ -1760,6 +1762,7 @@ setInterval(sealAll, 10 * 60 * 1000);
 setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עלייה
 
 const bootResult = boot();
+lastReplayLive = null; // גל-63: מטמון-ה-replay-שנמדד-בתוך-השחזור (mid-restore) אינו-אמת — הקיפול-הראשון-אחרי-עלייה=קיפול-טרי
 const g35Reconcile = genesisReconcile(); // גל-114·G35: שלמות-הספר-לפני-כל-זרימה
 const g35Capital = capitalReallocation(); // גל-114·G35: הון-עצל→מחזור
 const g35Working = workingCapitalBootstrap(); // גל-114·G35: הון-עובד-להתנעת-השוק
