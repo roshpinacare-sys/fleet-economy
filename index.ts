@@ -1106,6 +1106,29 @@ function replayParityLive(): { parity: boolean; deltas: number; source: string }
   return { parity, deltas, source: "live-fold", detail: detail.slice(0, 8) };
 }
 
+/* גל-66 · G66 · ריפוי-parity-בזמן-ריצה: פערי-מירוץ-ה-flush (בין-boots · אדוות-כתיבה) נמדדים-חי
+ * ב-/verify וב-/claims — עד-היום נרפאו רק-ב-boot (genesisReconcile בשורת-ה-boot) או בשבר-שרשרת.
+ * מעתה: כשהספר-תקין (verifyOk) והקיפול-החי מצא-פערים-אמיתיים (live-fold) — המנגנון-החוקתי
+ * genesisReconcile נקרא מיד (אידמפוטנטי-לפי-refs · שורות-השלמה-גנזיות · אפס-אפקט-חי) —
+ * הטענה מדברת-אמת-מהפעימה-הבאה, בלי-לחכות-ל-respawn-הבא. */
+let lastParityHealAt = 0;
+function ensureParityOrHeal(rp: { parity: boolean; deltas: number; source: string }, verifyOk: boolean): any {
+  if (rp.parity || rp.source !== "live-fold" || rp.deltas <= 0 || verifyOk !== true) return rp;
+  const now3 = Date.now();
+  if (now3 - lastParityHealAt < 60_000) return rp; // קור-רוח: לא-יותר-מריפוי-אחד-בדקה
+  lastParityHealAt = now3;
+  const detail = ((rp as any).detail ?? []) as string[];
+  try {
+    const res = genesisReconcile();
+    flush(); snapshotSave();
+    sealLog({ action: "runtime-parity-heal", deltas: rp.deltas, detail, wrote: res.reconciled ? 1 : 0 });
+    console.log(`[fleet-economy] G66-runtime-parity-heal: ${rp.deltas} פערי-מירוץ (${detail.join(" · ")}) → שורות-השלמה-גנזיות-נכתבו (אידמפוטנטי-לפי-refs)`);
+    (rp as any).healed = true;
+  } catch { /* כנה — הטענה-תמשיך-לדווח-את-הפער-בכנות */ }
+  lastReplayLive = null; // מדידה-טרייה-מיד — ה-cache-שלפני-הריפוי מיושן
+  return replayParityLive();
+}
+
 /* גל-114·G35 · הצבת-הון-עצל: מאמת-האתחול אינו-שחקן-כלכלי — 55,774$-ישבו-מחוץ-למחזור
  * בזמן-שהמשק-רעב (15,907-דחיות). חוק-הון-הריבון (G32): הכלכלה מממנת-את-עצמה —
  * עודף-מעל-צף-מאומת (2,000$) עובר-לכספת כהון-לאומי-מחזורי. עסקה-אמת-כפולת-ערך · חד-פעמית. */
@@ -1333,7 +1356,7 @@ const server = Bun.serve({
           } catch { /* כנה — הדיווח-על-השבר-יוצא-בכנות-בכל-מקרה */ }
         }
         lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked, anchors: r.anchors?.length ?? 0 };
-        const rp = replayParityLive();
+        const rp = ensureParityOrHeal(replayParityLive(), r.ok); // גל-66: פערי-parity-חיים מתרפאים-בזמן-ריצה
         return Response.json({ ...r, anchorsCount: r.anchors?.length ?? 0, replayParity, replayLive: rp });
       }
       /* ── גל-116 · G37 · GET /claims — פנקס-הטענות-החי-של-הכלכלה ──
@@ -1354,7 +1377,7 @@ const server = Bun.serve({
         let vAgeSec = lastVerify ? Math.round((now2 - lastVerify.at) / 1000) : null;
         if (!lastVerify || now2 - lastVerify.at > 10 * 60_000) { const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAnchors = r.anchors?.length ?? 0; vAgeSec = 0; }
         // גל-55 · G55 · השחזור-הפריטי נמדד-חי (קיפול-מלא מול יתרות-הזיכרון) — לא דגל-אתחול שהזדקן
-        const rp = replayParityLive();
+        const rp = ensureParityOrHeal(replayParityLive(), vOk); // גל-66: ריפוי-parity-בזמן-ריצה (אידמפוטנטי)
         // גבייה-בשיעור-החוק: מס-טהור/שירותים ≈ taxBps/10000 (±25% — עיגולים/יחידות)
         const svc = m2.serviceUsds1h ?? 0, taxPure = toF(taxLastHourMu());
         const taxMeasured = svc > 5 ? taxPure / svc : null;
@@ -1367,7 +1390,7 @@ const server = Bun.serve({
         const treasUsds = toF(bal("treasury").usds);
         const runwayHours = burn2 > 0 ? treasUsds / burn2 : Infinity;
         const claims = [
-          { id: "chain-integrity", claim: "השרשרת-מאומתת-מקצה-לקצה (כל-תפר-מגובה-רציפות-מוכחת · עד-5-עוגנים-תעודה, מעל-זה-אזעקה) והשחזור-הפריטי-חי (replayParity)", pass: vOk === true && (vAnchors ?? 0) <= 5 && rp.parity === true, measured: { verifyOk: vOk, checked: vChecked, anchors: vAnchors, replayParity: rp.parity, replayDeltas: rp.deltas, replayDetail: (rp as any).detail ?? [], replaySource: rp.source, verifyAgeSec: vAgeSec, bookGen } }, // גל-57: עוגן-מגובה (verifyChain-ok-כבר-fail-closed-על-עוגן-לא-מוכח) = תעודת-המשכיות לפי-דוקטרינת-גל-85 — לא-שבר; הקיפול-חי-כולל-את-ה-buffer (דיסק+buffer == זיכרון)
+          { id: "chain-integrity", claim: "השרשרת-מאומתת-מקצה-לקצה (כל-תפר-מגובה-רציפות-מוכחת · עד-5-עוגנים-תעודה, מעל-זה-אזעקה) והשחזור-הפריטי-חי (replayParity)", pass: vOk === true && (vAnchors ?? 0) <= 5 && rp.parity === true, measured: { verifyOk: vOk, checked: vChecked, anchors: vAnchors, replayParity: rp.parity, replayDeltas: rp.deltas, replayDetail: (rp as any).detail ?? [], replaySource: rp.source, verifyAgeSec: vAgeSec, bookGen, parityHealed: (rp as any).healed ?? false } }, // גל-57: עוגן-מגובה (verifyChain-ok-כבר-fail-closed-על-עוגן-לא-מוכח) = תעודת-המשכיות לפי-דוקטרינת-גל-85 — לא-שבר; הקיפול-חי-כולל-את-ה-buffer (דיסק+buffer == זיכרון)
           { id: "law-is-book", claim: "החוק-החי-שווה-לשורת-החוק-החתומה-בספר (אפס-חוק-מפלג)", pass: govLawFromBook ? JSON.stringify(govLawFromBook.law) === JSON.stringify(lawNow) : null, measured: { fromBook: govLawFromBook?.law ?? null, live: lawNow, bookAt: govLawFromBook?.at ?? null, src: govLawFromBook?.src ?? null } },
           { id: "no-negative-balances", claim: "אף-חשבון-אינו-שלילי (USDS·SAOS — חשבונאות-כפולה-שלמה)", pass: minUsds >= 0 && minSaos >= 0, measured: { minUsds, minSaos, accounts: balances.size } },
           { id: "windows-alive", claim: "חלונות-המדידה-חיים (שכר ושירותים בשעה האחרונה)", pass: m2.wageRows1h > 0 && svc > 0, measured: { wageRows1h: m2.wageRows1h, wageUsds1h: +m2.wageUsds1h.toFixed(2), serviceUsds1h: +svc.toFixed(2) } },
