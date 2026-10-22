@@ -8,11 +8,19 @@ verifyChain הקנוני (mini-services/fleet-economy/index.ts):
   prev="GENESIS" → לכל-אירוע: body=JSON.stringify({...רשומה-בלי-h, prev});
   h=sha256(body).slice(0,32); חייב-להשתוות ל-h-בקובץ; prev=h.
 
+G59 · סנכרון-דוקטרינת-העוגנים (גל-85 + Z2-15) — העתק-הפייתון היה-מיושן-ודיווח
+שבר-שקרי על עוגן-תפר היסטורי לגיטימי (נמדד חי: brokenAt=215 על ספר ok:true):
+  · אי-התגשבות-hash → עוגן-תפר: נרשם, prev=h-השמור, השורה-הבאה חייבת-להתגבש
+  · שני-עוגנים-רצופים = שבר-אמת (אינם מתגבשים)
+  · זנב-טרמינלי-בלתי-מעוגן (הספר-נגמר-על-עוגן) = שבר fail-closed
+  · חוק-סדר-seq: נסיגה/כפילות-seq = שבר-מבנה
+  · דוקטרינת-האזעקה: anchors≤5 = תעודה (ok=True) · anchors>5 = אזעקה (ok=False)
+
 התאמת-JS-מדויקת: מפתחות-בסדר-הקובץ · מחרוזות-ללא-בריחת-ASCII · מספרים-בפורמט
 קצר-הדדיות של-JS (repr + נרמול-מעריך: 1e-07→1e-7) · מפרידים-צפופים.
 
 שימוש: verify_chain.py <ledger.jsonl או תיקיית-ספר>
-פלט (נאכף-בפעימת-הבנאי): ok=True/False checked=N anchors=[...] (+שורות-אבחון)
+פלט (נאכף-בפעימת-הבנאי): ok=True/False checked=N anchors=[...] anchorAlarm=... (+אבחון)
 """
 import hashlib
 import json
@@ -21,7 +29,7 @@ import re
 import sys
 
 GENESIS = "GENESIS"
-ANCHOR_KINDS = {"anchor", "join-anchor", "seam-anchor", "seam"}
+MAX_ANCHORS = 5  # דוקטרינת-העוגנים: עד-5 = תעודה, מעל-זה = אזעקה
 
 
 def js_num(x):
@@ -82,13 +90,15 @@ def ledger_files(base):
 
 def main():
     if len(sys.argv) < 2:
-        print("ok=False checked=0 anchors=[] why=missing-arg")
+        print("ok=False checked=0 anchors=[] anchorAlarm=False why=missing-arg")
         return 2
     target = sys.argv[1]
     base_dir, files = ledger_files(target)
 
     prev = GENESIS
     checked = 0
+    last_seq = 0
+    prev_was_anchor = False
     broken_at = None
     anchors = []
     for name in files:
@@ -105,26 +115,44 @@ def main():
                         broken_at = checked
                         break
                     h = t.pop("h", None)
+                    seq = t.get("seq")
+                    # Z2-15 · חוק-סדר: נסיגת/כפילות-seq = שבר-מבנה fail-closed
+                    if not isinstance(seq, (int, float)) or isinstance(seq, bool) or seq <= last_seq:
+                        broken_at = seq if isinstance(seq, (int, float)) else checked
+                        break
+                    last_seq = seq
                     body = js_dumps({**t, "prev": prev})
                     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:32]
                     if h is None or digest != h:
-                        broken_at = t.get("seq", checked)
-                        break
+                        if prev_was_anchor:
+                            broken_at = seq  # שבר-אמת: שני-עוגנים-רצופים לא מתגבשים
+                            break
+                        # עוגן-תפר: המשך מה-h השמור, השורה-הבאה חייבת להתגבש
+                        anchors.append(seq)
+                        prev = h
+                        prev_was_anchor = True
+                        continue
                     prev = h
                     checked += 1
-                    k = t.get("kind")
-                    if isinstance(k, str) and k in ANCHOR_KINDS:
-                        anchors.append(t.get("seq"))
+                    prev_was_anchor = False
         except FileNotFoundError:
             broken_at = checked
             break
         if broken_at is not None:
             break
 
-    ok = broken_at is None
-    print(f"ok={'True' if ok else 'False'} checked={checked} anchors=[{','.join(str(a) for a in anchors)}]")
+    # Z2-15 · זנב-בלתי-מעוגן: הספר-נגמר-על-עוגן בלי-יורש-שמוכיח-עיגון-מחדש → שבר fail-closed
+    if broken_at is None and prev_was_anchor and anchors:
+        broken_at = anchors[-1]
+
+    alarm = len(anchors) > MAX_ANCHORS
+    ok = broken_at is None and not alarm
+    print(f"ok={'True' if ok else 'False'} checked={checked} anchors=[{','.join(str(a) for a in anchors)}] anchorAlarm={'True' if alarm else 'False'}")
     if not ok:
-        print(f"brokenAt={broken_at}")
+        if broken_at is not None:
+            print(f"brokenAt={broken_at}")
+        if alarm:
+            print(f"alarm=anchors>{MAX_ANCHORS} — דוקטרינת-העוגנים: צמיחת-עוגנים מעל-התעודה = אזעקה")
         print(f"first-failed-file={files[0] if files else '-'}")
     else:
         last_file = files[-1] if files else "-"

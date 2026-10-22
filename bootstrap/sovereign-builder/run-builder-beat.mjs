@@ -112,6 +112,28 @@ function git(args, cwd = CLONE) {
   return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+/* G59 · ריבונות-איטום-עצמית: האיטום קורא את הטוקן-החי מכספת-ה-PAT בעצמו (אותו-מקור
+ * של-push-reviver) ומרענן את origin לפני כל דחיפה. נמדד-חי (2026-10-22T08:04Z):
+ * ensureClone ירש מהעץ-החי כתובת-פגומה ("GITHUB_PAT=" גולם הוטמע ב-URL) → כל-SEAL
+ * מת על "Invalid username or token" → הפעילות-האוטונומית לא מגיעה לענן. מעתה הבנאי
+ * אחראי-על-אימותו: אפס-ירושה-של-כתובות · אפס-סודות-בלוג. */
+const PAT_FILE = "/home/z/my-project/upload/pat.env";
+const ORIGIN_HOST = "github.com/roshpinacare-sys/fleet-economy.git";
+function readPat() {
+  try {
+    const m = fs.readFileSync(PAT_FILE, "utf8").match(/GITHUB_PAT\s*=\s*([^\s\r\n]+)/);
+    return m ? m[1] : null;
+  } catch { return null; }
+}
+function refreshOrigin() {
+  const tok = readPat();
+  if (!tok) return false; // אין-טוקן → הדחיפה-בכתובת-הקיימת · איטימה-מקומית-ממשיכה (fail-honest)
+  try {
+    git(["remote", "set-url", "origin", `https://x-access-token:${tok}@${ORIGIN_HOST}`]);
+    return true;
+  } catch { return false; }
+}
+
 // ---------- state ----------
 function loadState() {
   try {
@@ -288,8 +310,11 @@ function actOnItem(item) {
 // ---------- seal (FF-טהור, merge-נקי כגיבוי, abort כ-fail-closed) ----------
 function ensureClone() {
   if (fs.existsSync(`${CLONE}/.git`)) return true;
-  let url;
-  try { url = git(["config", "--get", "remote.origin.url"], ESTATE); } catch { return false; }
+  /* G59: עדיפות-לכתובת-מהכספת (ריבונות-עצמית); נפילה-לכתובת-העץ-החי-רק-כגיבוי */
+  let url = readPat() ? `https://x-access-token:${readPat()}@${ORIGIN_HOST}` : null;
+  if (!url) {
+    try { url = git(["config", "--get", "remote.origin.url"], ESTATE); } catch { return false; }
+  }
   if (!url) return false;
   try {
     execFileSync("git", ["clone", "--no-hardlinks", url, CLONE], { encoding: "utf8", timeout: 180_000 });
@@ -372,6 +397,7 @@ function seal() {
 
     const st = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
     git(["commit", "-m", `[builder] acts=${st.acts} metrics=${st.metrics} backlog=${st.backlog.length} · צמיחה-ריבונית מאוטמת`]);
+    refreshOrigin(); // G59: אימות-עצמי-לפני-כל-דחיפה
     git(["push", "origin", "main"]);
     return { ok: true, why: `איטום-בנאי דחוף (${staged.split("\n").length} קבצים)` };
   } catch (e) {
