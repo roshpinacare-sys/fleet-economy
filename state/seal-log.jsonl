@@ -955,6 +955,15 @@ use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' i
 {"ts":"2026-10-22T01:20:07.010Z","repo":"my-project","action":"synced","how":"merge","out":"Already up to date."}
 {"ts":"2026-10-22T01:20:08.497Z","repo":"my-project","action":"state-custody-restore","brokenAt":103193,"restored":true}
 {"ts":"2026-10-22T01:20:10.702Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   d2e9455..1c68d4a  HEAD -> main"}
+{"ts":"2026-10-22T01:37:06.728Z","repo":"my-project","action":"synced","how":"merge","out":"Already up to date."}
+{"ts":"2026-10-22T01:37:06.954Z","repo":"my-project","action":"state-custody-restore","brokenAt":103193,"restored":true}
+{"ts":"2026-10-22T01:37:08.681Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   60c9a96..1bb5ada  HEAD -> main"}
+{"ts":"2026-10-22T01:37:11.912Z","repo":"fleet-economy","action":"sync-union-fail","out":"fail:state/ledger.jsonl:Error: no-sides"}
+{"ts":"2026-10-22T01:37:18.000Z","repo":"fleet-economy","action":"sync-union-fail","out":"fail:state/ledger.jsonl:Error: no-sides"}
+{"ts":"2026-10-22T01:37:18.765Z","repo":"fleet-economy","action":"push-fail","out":"HEAD -> main (non-fast-forward)\nerror: failed to push some refs to 'https://github.com/roshpinacare-sys/fleet-economy.git'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' in 'git push --help' for details."}
+{"ts":"2026-10-22T01:37:19.874Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
+{"ts":"2026-10-22T01:37:20.919Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
+{"ts":"2026-10-22T01:37:20.919Z","action":"sweep-done"}
 {"ts":"2026-10-22T01:20:13.194Z","repo":"fleet-economy","action":"synced","how":"merge","out":"Already up to date."}
 {"ts":"2026-10-22T01:20:21.255Z","repo":"fleet-economy","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/fleet-economy.git\n   6b1541b..8422ace  HEAD -> main"}
 {"ts":"2026-10-22T01:20:22.563Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
@@ -986,3 +995,6 @@ use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' i
 {"ts":"2026-10-22T01:50:19.065Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
 {"ts":"2026-10-22T01:50:19.800Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
 {"ts":"2026-10-22T01:50:19.800Z","action":"sweep-done"}
+{"ts":"2026-10-22T01:47:06.810Z","repo":"my-project","action":"synced","how":"union","out":"resolved=4"}
+{"ts":"2026-10-22T01:47:07.037Z","repo":"my-project","action":"state-custody-restore","brokenAt":103193,"restored":true}
+{"ts":"2026-10-22T01:47:08.711Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   f053cd1..63fcba5  HEAD -> main"}
