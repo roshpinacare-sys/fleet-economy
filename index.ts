@@ -963,27 +963,33 @@ function auditFullReplay() {
   // רק-החלפות מזיזות-את-הבריכה-כמודול-AMM (כמו-בחיים). רשומות-תיקון-גנזיות (ext-deposit/reconcile-adjustment)
   // נספרות-כאן — כך-הקיפול-כולל-את-ההשלמות-ומגיע-לפריטה-מלאה.
   const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
+  // גל-57 · סגירת-פער-ההשהיה: הקיפול חייב לכלול גם את שורות ה-buffer שטרם נחתכו לדיסק —
+  // אחרת הדיסק-תמיד-מפגר-אחרי-הזיכרון (עד-64-שורות/30ש') → פערי-השהיה נראים כפערי-אמת →
+  // ה-reconcile כותב שורות-פיצוי על אדוות-הכתיבה-עצמן → הפיצויים-יוצרים פער-הפוך (מטוטלת,
+  // נמדד-חי 06:03: 9-שורות-השלמה-נכתבו-ובכל-זאת deltas=3). דיסק+buffer = כל-השורות-שהוחלו = הזיכרון.
+  const foldOne = (line: string) => {
+    let t: any; try { t = JSON.parse(line); } catch { return; }
+    const field = t.asset === "USDS" ? "usds" : "saos";
+    const amtMu = fromF(Number(t.amount) || 0);
+    const poolB = g("pool");
+    if (t.kind === "ext-deposit") { (g(t.to) as any)[field] += amtMu; return; }
+    if (t.kind === "reconcile-adjustment") { (g(t.to) as any)[field] -= amtMu; return; } // תיקון-גנזי-שלילי-מתועד (agent-2 G35): מוריד-מתצוגת-הלדגר-של-היעד
+    if (t.kind === "stake") { const fb = g(t.from); fb.saos -= amtMu; fb.saosStaked += amtMu; return; }
+    if (t.kind === "unstake") { const fb = g(t.from); if (fb.saosStaked < amtMu) return; fb.saosStaked -= amtMu; g(t.to).saos += amtMu; return; }
+    const fb = g(t.from), tb = g(t.to);
+    (fb as any)[field] -= amtMu;
+    if (t.kind === "swap") {
+      if (t.asset === "USDS") { poolB.usds += amtMu; poolB.saos -= fromF(Number(t.outSaos) || 0); fb.saos += fromF(Number(t.outSaos) || 0); }
+      else { poolB.saos += amtMu; poolB.usds -= fromF(Number(t.outUsds) || 0); fb.usds += fromF(Number(t.outUsds) || 0); }
+    } else {
+      (tb as any)[field] += amtMu;
+    }
+  };
   for (const f of files) {
     const lines = fs.readFileSync(path.join(STATE_DIR, f), "utf8").split("\n").filter(Boolean);
-    for (const line of lines) {
-      let t: any; try { t = JSON.parse(line); } catch { continue; }
-      const field = t.asset === "USDS" ? "usds" : "saos";
-      const amtMu = fromF(Number(t.amount) || 0);
-      const poolB = g("pool");
-      if (t.kind === "ext-deposit") { (g(t.to) as any)[field] += amtMu; continue; }
-      if (t.kind === "reconcile-adjustment") { (g(t.to) as any)[field] -= amtMu; continue; } // תיקון-גנזי-שלילי-מתועד (agent-2 G35): מוריד-מתצוגת-הלדגר-של-היעד
-      if (t.kind === "stake") { const fb = g(t.from); fb.saos -= amtMu; fb.saosStaked += amtMu; continue; }
-      if (t.kind === "unstake") { const fb = g(t.from); if (fb.saosStaked < amtMu) continue; fb.saosStaked -= amtMu; g(t.to).saos += amtMu; continue; }
-      const fb = g(t.from), tb = g(t.to);
-      (fb as any)[field] -= amtMu;
-      if (t.kind === "swap") {
-        if (t.asset === "USDS") { poolB.usds += amtMu; poolB.saos -= fromF(Number(t.outSaos) || 0); fb.saos += fromF(Number(t.outSaos) || 0); }
-        else { poolB.saos += amtMu; poolB.usds -= fromF(Number(t.outUsds) || 0); fb.usds += fromF(Number(t.outUsds) || 0); }
-      } else {
-        (tb as any)[field] += amtMu;
-      }
-    }
+    for (const line of lines) foldOne(line);
   }
+  for (const line of ledgerBuf) foldOne(line); // גל-57: הזנב-שטרם-נחתך — חלק-מן-האמת
   return { fold };
 }
 
