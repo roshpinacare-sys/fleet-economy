@@ -1092,18 +1092,18 @@ function replayParityLive(): { parity: boolean; deltas: number; source: string }
   // גל-57 · cache-מודע-דור: cache שנולד-בדור-ספר-אחר אינו-אמת — רג'נזיס/ריפוי = קיפול-טרי מיד
   if (lastReplayLive && lastReplayLive.bg === bookGen && Date.now() - lastReplayLive.at < 300_000) return { parity: lastReplayLive.parity, deltas: lastReplayLive.deltas, source: "cache<5דק'" };
   const a = auditFullReplay();
-  const EPS = 0.01; const seen = new Set<string>(); let deltas = 0;
+  const EPS = 0.01; const seen = new Set<string>(); let deltas = 0; const detail: string[] = [];
   const bad = (id: string, field: string, liveMu: bigint, foldMu: bigint) => {
     const d = +toF(liveMu - foldMu).toFixed(6);
     if (Math.abs(d) <= EPS) return;
     const key = `${id}:${field}`;
-    if (!seen.has(key)) { seen.add(key); deltas++; }
+    if (!seen.has(key)) { seen.add(key); deltas++; detail.push(`${id}.${field}=${d > 0 ? "+" : ""}${d}`); }
   };
   for (const [id, lb] of a.fold) { bad(id, "usds", bal(id).usds, lb.usds); bad(id, "saos", bal(id).saos, lb.saos); }
-  for (const [id, b] of balances) { if (a.fold.has(id)) continue; if (toF(b.usds) !== 0 || toF(b.saos) !== 0) deltas++; }
+  for (const [id, b] of balances) { if (a.fold.has(id)) continue; if (toF(b.usds) !== 0 || toF(b.saos) !== 0) { deltas++; detail.push(`${id}=.missing-in-fold`); } }
   const parity = deltas === 0;
   lastReplayLive = { at: Date.now(), parity, deltas, bg: bookGen };
-  return { parity, deltas, source: "live-fold" };
+  return { parity, deltas, source: "live-fold", detail: detail.slice(0, 8) };
 }
 
 /* גל-114·G35 · הצבת-הון-עצל: מאמת-האתחול אינו-שחקן-כלכלי — 55,774$-ישבו-מחוץ-למחזור
