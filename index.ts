@@ -896,6 +896,17 @@ function boot() {
       // dedup שורד-הפעלה-מחדש: מפיקים-חיים + poller-מילויים לא יספרו מילוי-כפול אחרי-restart
       if (Array.isArray(s.seenRefs)) for (const [k, v] of s.seenRefs as [string, number][]) seenRefs.set(k, v);
       if (!balances.has("treasury")) throw new Error("snapshot corrupt");
+      // גל-55 · G55 · לידת-ספר-חדש מסנאפשוט-חי: סנאפשוק-קיים בלי-אף-קובץ-ספר = הספר ירד-להסגר
+      // (פורנזיה/רג'נזיס). השרשרת-החדשה חייבת-להיוולד מ-GENESIS ולא מ-lastH-תלוי-של-ספר-שאיננו —
+      // אחרת השורה-הראשונה נולדת-עוגן (prev-תלוי). המצב-החי (יתרות-הסנאפשוט) נשמר-מילימטרית;
+      // genesisReconcile (מיד-אחרי-ה-boot) יכתוב את כל-היתרות כשורות-השלמה חתומות מ-GENESIS —
+      // פריטה-מלאה-אמת מהשורה-הראשונה. דור-הספר עולה (refs-השלמה-פר-ספר).
+      const hasBookFiles = fs.readdirSync(STATE_DIR).some((f) => f === "ledger.jsonl" || f.startsWith("ledger-"));
+      if (!hasBookFiles) {
+        bookGen++;
+        seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; recent = [];
+        console.log(`[fleet-economy] G55-fresh-book: סנאפשוט-חי בלי-ספר (seq=${s.seq ?? "?"} ירד-להסגר) — ספר-דור-${bookGen} נולד מ-GENESIS · היתרות-יכתבו-כשורות-השלמה-חתומות`);
+      }
       // ריפוי-עצמי בעלייה (גל-82 · שורש-התפר): אם-הספר-על-הדיסק-תפור (תפר-מיזוג-גיט
       // בין-שרשרת-מקומית-לענן) — אין-המשך-על-ספר-שבור: הסגר-כנה + זריעה-חדשה.
       // גל-49 · G49 · ריפוי-שרשרת-בעלייה: לפני-שבודקים — מאחזים. chain-reconcile משחזר
