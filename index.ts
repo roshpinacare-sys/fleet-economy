@@ -47,7 +47,7 @@ function acquireWriterLock(): boolean {
     if (fs.existsSync(WRITER_LOCK)) {
       try {
         const l = JSON.parse(fs.readFileSync(WRITER_LOCK, "utf8"));
-        if (l?.pid && Number.isFinite(l.pid) && l.pid !== process.pid && pidAlive(l.pid)) return false; // כותב-חי — מפנים-בשקט
+        if (l?.pid && Number.isFinite(l.pid) && l.pid !== process.pid && pidAlive(l.pid) && Date.now() - (l.at ?? 0) < 24 * 3600_000) return false; // כותב-חי-וטרי — מפנים-בשקט (סף-24ש' = הגנה-מ-pid-reuse)
         try { fs.renameSync(WRITER_LOCK, path.join(STATE_DIR, "quarantine", `${new Date().toISOString().replace(/[:.]/g, "-")}·stale-writer-lock.json`)); } catch {}
       } catch { /* מנעול-פגום — השתלטות-כנה */ }
     }
@@ -1752,6 +1752,7 @@ const g35Working = workingCapitalBootstrap(); // גל-114·G35: הון-עובד-
 ingestExtFlows(); // גל-109 · שער-הזרימות-החוץ: אחרי-boot (seenRefs-כבר-שוחזר → dedup-חוצה-דורות)
 setInterval(tick, TICK_MS);
 setInterval(snapshotSave, SNAP_MS);
+setInterval(refreshWriterLock, 15 * 60_000); // גל-57: דופק-מנעול-חי (סף-ה-24ש' ב-pidAlive נשאר-טרי)
 process.on("exit", () => { try { flush(); snapshotSave(); } catch {} });
 
 /* ── רשת-ביטחון למילויי-דקס (poller): כל-עסקה שנרשמה בפועל במנוע-הדקס (DexTrade —
