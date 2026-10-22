@@ -1016,6 +1016,17 @@ use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' i
 {"ts":"2026-10-22T02:02:10.418Z","repo":"my-project","action":"synced","how":"union","out":"resolved=5"}
 {"ts":"2026-10-22T02:02:10.658Z","repo":"my-project","action":"state-custody-restore","brokenAt":103193,"restored":true}
 {"ts":"2026-10-22T02:02:12.365Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   4daf2fc..274bfcd  HEAD -> main"}
+{"ts":"2026-10-22T02:02:14.746Z","repo":"fleet-economy","action":"synced","how":"merge","out":"Already up to date."}
+{"ts":"2026-10-22T02:02:19.926Z","repo":"fleet-economy","action":"sealed","ahead":"2","detail":"To https://github.com/roshpinacare-sys/fleet-economy.git\n   33381fe..dc0891b  HEAD -> main"}
+{"ts":"2026-10-22T02:02:20.917Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
+{"ts":"2026-10-22T02:02:21.676Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
+{"ts":"2026-10-22T02:02:21.677Z","action":"sweep-done"}
+{"ts":"2026-10-22T02:11:24.789Z","repo":"fleet-economy","action":"sync-union","out":"resolved=0"}
+{"ts":"2026-10-22T02:11:30.854Z","repo":"fleet-economy","action":"sync-union","out":"resolved=0"}
+{"ts":"2026-10-22T02:11:31.572Z","repo":"fleet-economy","action":"push-fail","out":"HEAD -> main (non-fast-forward)\nerror: failed to push some refs to 'https://github.com/roshpinacare-sys/fleet-economy.git'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' in 'git push --help' for details."}
+{"ts":"2026-10-22T02:11:32.522Z","repo":"coord-work","action":"synced","how":"ff","out":"Already up to date."}
+{"ts":"2026-10-22T02:11:33.254Z","repo":"coord-work","action":"sealed","ahead":"0","detail":"Everything up-to-date"}
+{"ts":"2026-10-22T02:11:33.254Z","action":"sweep-done"}
 {"ts":"2026-10-22T02:07:07.050Z","repo":"my-project","action":"synced","how":"merge","out":"Merge made by the 'ort' strategy."}
 {"ts":"2026-10-22T02:07:07.291Z","repo":"my-project","action":"state-custody-restore","brokenAt":103193,"restored":true}
 {"ts":"2026-10-22T02:07:09.269Z","repo":"my-project","action":"sealed","ahead":"0","detail":"To https://github.com/roshpinacare-sys/saos-console-zai.git\n   0569c9c..3bb1f4e  HEAD -> main"}
