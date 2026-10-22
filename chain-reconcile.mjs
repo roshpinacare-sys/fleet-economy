@@ -26,6 +26,7 @@ const STATE_DIR = (() => {
   return i > 0 ? process.argv[i + 1] : path.join(import.meta.dir, "state");
 })();
 const LOOP_N = (() => { const i = process.argv.indexOf("--loop"); return i > 0 ? Number(process.argv[i + 1]) || 3 : 3; })();
+const REPORT = process.argv.includes("--report"); // גל-55: מצב-דיווח-בלבד — אפס-כתיבה (הספר-החי בבעלות-הכותב; הכלי-רק-מעיד)
 const LEDGER = path.join(STATE_DIR, "ledger.jsonl");
 const SNAP = path.join(STATE_DIR, "snapshot.json");
 const QUAR = path.join(STATE_DIR, "quarantine");
@@ -100,6 +101,12 @@ function onePass() {
 
   const snap = readSnapshot();
   const reachedSnapshot = snap ? prev === snap.lastH || kept.some((l) => l.includes(`"h":"${snap.lastH}"`)) : false;
+
+  // גל-55 · G55 · מצב-דיווח: הספר-החי בבעלות-הכותב-היחיד — הכלי מעיד-בלבד (אפס-כתיבה).
+  // הכתיבה-מותרת-רק-ב-boot (לפני-שהכותב-נשם) — כשמרפא-ה-boot קורא-בלי --report.
+  if (REPORT) {
+    return { ok: true, reportOnly: true, keptLines: kept.length, orphanLines: orphans.length, badLines: badLines.length, anchors, lastKeptSeq, maxSeqInFile: maxK, reachedSnapshot };
+  }
 
   // אפס-מחיקה: יתומים → הסגר
   if (orphans.length || badLines.length) {
