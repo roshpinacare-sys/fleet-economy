@@ -1,50 +1,50 @@
 {
   "schema": "sovereign-builder-state/v1",
-  "createdAt": "2026-10-21T22:16:29.898Z",
+  "createdAt": "2026-10-22T16:11:53.381Z",
   "backlog": [],
-  "growthLogCount": 160,
-  "acts": 12,
-  "metrics": 54,
+  "growthLogCount": 28,
+  "acts": 10,
+  "metrics": 10,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 50,
-  "sealFailures": 3,
+  "seals": 9,
+  "sealFailures": 0,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-22T09:01:25.201Z",
+  "lastAt": "2026-10-22T18:14:34.348Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
-    "verify_chain": {
-      "runs": 1,
-      "ok": 1,
-      "fail": 0,
-      "lastOkAt": "2026-10-21T22:19:52.276Z",
-      "lastResult": "ok=True checked=2210 anchors=[]",
-      "lastAt": "2026-10-21T22:19:52.276Z"
-    },
     "ledger_stats": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-21T22:34:55.410Z",
-      "lastResult": "ok=True checked=11700 seqFirst=1 seqLast=10242",
-      "lastAt": "2026-10-21T22:34:55.410Z"
+      "lastOkAt": "2026-10-22T16:15:14.178Z",
+      "lastResult": "ok=True checked=138818 seqFirst=1 seqLast=138818",
+      "lastAt": "2026-10-22T16:15:14.178Z"
     },
     "price_report": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-21T22:49:00.480Z",
-      "lastResult": "ok=True seq=17658 price=3.670445 fees=0.38216 treasuryUsds=60493.42284",
-      "lastAt": "2026-10-21T22:49:00.480Z"
+      "lastOkAt": "2026-10-22T16:30:19.273Z",
+      "lastResult": "ok=True seq=139228 price=4.137945 fees=0.005682 treasuryUsds=60523.504466",
+      "lastAt": "2026-10-22T16:30:19.273Z"
     },
     "tools_selftest": {
       "runs": 1,
-      "ok": 0,
-      "fail": 1,
-      "lastOkAt": null,
-      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_s",
-      "lastAt": "2026-10-21T23:05:05.932Z"
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-22T16:44:06.188Z",
+      "lastResult": "ok=True tools=3 used=3",
+      "lastAt": "2026-10-22T16:44:06.188Z"
+    },
+    "verify_chain": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-22T17:00:28.852Z",
+      "lastResult": "ok=True checked=140066 anchors=[]",
+      "lastAt": "2026-10-22T17:00:28.852Z"
     }
   }
 }
