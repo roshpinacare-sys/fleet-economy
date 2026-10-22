@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-verify_chain.py — אימות-שרשרת-פנקס בלתי-תלוי (גל-91 · agent-2 · נבנה-מחדש גל-95)
+verify_chain.py — אימות-שרשרת-פנקס בלתי-תלוי (גל-91 · agent-2 · נבנה-מחדש גל-95 · דוקטרינת-עוגנים גל-62/59-C2)
 ═══════════════════════════════════════════════════════════════════════════════
 אמת-מדידה עצמאית: פייתון-טהור, ללא-תלות-במנוע-ה-JS. שכפול-מילה-במילה של
-verifyChain הקנוני (mini-services/fleet-economy/index.ts):
+verifyChain הקנוני (fleet-economy/index.ts · Z2-15):
   prev="GENESIS" → לכל-אירוע: body=JSON.stringify({...רשומה-בלי-h, prev});
   h=sha256(body).slice(0,32); חייב-להשתוות ל-h-בקובץ; prev=h.
 
+דוקטרינת-העוגנים (הוכחה-חיה במנוע · אומצה-כאן מילה-במילה):
+  · חוק-סדר-seq: נסיגה/כפילות-seq = שבר-מבנה fail-closed.
+  · עוגן-תפר: שורה שכשלת-התגבשות פעם-אחת = עוגן — המשך-מה-h-השמור שלה;
+    השורה-הבאה חייבת להתגבש (רציפות-מוכחת, אפס-שכתוב-היסטוריה).
+  · שני-עוגנים-רצופים = שבר-אמת (לא מתגבשים).
+  · זנב-טרמינלי-על-עוגן = שבר-אמת (אין-יורש-שמוכיח-עיגון-מחדש).
+  · anchorAlarm: >5-עוגנים = אזעקה (צמיחה-חריגה של תפרים).
+
 התאמת-JS-מדויקת: מפתחות-בסדר-הקובץ · מחרוזות-ללא-בריחת-ASCII · מספרים-בפורמט
 קצר-הדדיות של-JS (repr + נרמול-מעריך: 1e-07→1e-7) · מפרידים-צפופים.
+סדר-קבצים: לקסיקוגרפי (כמו-המנוע) · חוק-סדר-seq שופט.
 
 שימוש: verify_chain.py <ledger.jsonl או תיקיית-ספר>
 פלט (נאכף-בפעימת-הבנאי): ok=True/False checked=N anchors=[...] (+שורות-אבחון)
@@ -17,11 +26,10 @@ verifyChain הקנוני (mini-services/fleet-economy/index.ts):
 import hashlib
 import json
 import os
-import re
 import sys
 
 GENESIS = "GENESIS"
-ANCHOR_KINDS = {"anchor", "join-anchor", "seam-anchor", "seam"}
+ANCHOR_ALARM = 5  # גל-59-C2: מעל-5-עוגנים-תפר = אזעקה (צמיחה-חריגה)
 
 
 def js_num(x):
@@ -65,19 +73,61 @@ def js_dumps(o):
 
 
 def ledger_files(base):
-    """סדר-קבצי-הספר — מילה-במילה מ-ledgerFiles() הקנוני (מיון-מספרי-גל-85)."""
+    """סדר-קבצי-הספר — כמו-verifyChain המנוע: סינון + מיון-לקסיקוגרפי (חוק-סדר-seq שופט)."""
     if os.path.isfile(base):
         base_dir = os.path.dirname(os.path.abspath(base))
         names = [os.path.basename(base)]
     else:
         base_dir = base
         names = [f for f in os.listdir(base_dir) if f == "ledger.jsonl" or f.startswith("ledger-")]
+    return base_dir, sorted(names)
 
-    def key(n):
-        m = re.search(r"-(\d+)\.jsonl$", n)
-        return (int(m.group(1)) if m else 0, n)
 
-    return base_dir, sorted(names, key=key)
+def verify(base_dir, files):
+    """שכפול-מילה-במילה של verifyChain הקנוני (דוקטרינת-עוגנים Z2-15)."""
+    prev = GENESIS
+    checked = 0
+    prev_was_anchor = False
+    last_seq = 0
+    anchors = []
+    for name in files:
+        p = os.path.join(base_dir, name)
+        try:
+            fh = open(p, "r", encoding="utf-8")
+        except FileNotFoundError:
+            return False, checked, checked, anchors
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    t = json.loads(line)
+                except Exception:
+                    return False, checked, checked, anchors
+                if not isinstance(t, dict):
+                    return False, checked, checked, anchors
+                seq = t.get("seq")
+                if not isinstance(seq, (int, float)) or isinstance(seq, bool) or seq <= last_seq:
+                    return False, checked, seq, anchors  # חוק-סדר-seq fail-closed
+                last_seq = seq
+                h = t.pop("h", None)
+                body = js_dumps({**t, "prev": prev})
+                digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:32]
+                if digest != h:
+                    if prev_was_anchor:
+                        return False, checked, seq, anchors  # שבר-אמת: שני-עוגנים-רצופים לא מתגבשים
+                    anchors.append(seq)  # עוגן-תפר: המשך מה-h השמור, השורה-הבאה חייבת להתגבש
+                    prev = h
+                    prev_was_anchor = True
+                    continue
+                prev = h
+                checked += 1
+                prev_was_anchor = False
+    # זנב-בלתי-מעוגן: הספר-נגמר-על-עוגן בלי-יורש-שמוכיח-עיגון-מחדש → שבר-אמת fail-closed
+    if prev_was_anchor and anchors:
+        return False, checked, anchors[-1], anchors
+    return True, checked, None, anchors, prev
 
 
 def main():
@@ -86,50 +136,20 @@ def main():
         return 2
     target = sys.argv[1]
     base_dir, files = ledger_files(target)
+    ok, checked, broken_at, anchors, prev = verify(base_dir, files)
 
-    prev = GENESIS
-    checked = 0
-    broken_at = None
-    anchors = []
-    for name in files:
-        p = os.path.join(base_dir, name)
-        try:
-            with open(p, "r", encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        t = json.loads(line, object_pairs_hook=lambda pairs: dict(pairs))
-                    except Exception:
-                        broken_at = checked
-                        break
-                    h = t.pop("h", None)
-                    body = js_dumps({**t, "prev": prev})
-                    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:32]
-                    if h is None or digest != h:
-                        broken_at = t.get("seq", checked)
-                        break
-                    prev = h
-                    checked += 1
-                    k = t.get("kind")
-                    if isinstance(k, str) and k in ANCHOR_KINDS:
-                        anchors.append(t.get("seq"))
-        except FileNotFoundError:
-            broken_at = checked
-            break
-        if broken_at is not None:
-            break
-
-    ok = broken_at is None
-    print(f"ok={'True' if ok else 'False'} checked={checked} anchors=[{','.join(str(a) for a in anchors)}]")
+    alarm = len(anchors) > ANCHOR_ALARM
+    print(f"ok={'True' if ok and not alarm else 'False'} checked={checked} anchors=[{','.join(str(a) for a in anchors)}]")
+    if alarm:
+        print(f"anchorAlarm=True count={len(anchors)} threshold={ANCHOR_ALARM} — צמיחת-תפרים-חריגה")
+        return 1
     if not ok:
         print(f"brokenAt={broken_at}")
         print(f"first-failed-file={files[0] if files else '-'}")
-    else:
-        last_file = files[-1] if files else "-"
-        print(f"files={len(files)} lastFile={last_file} prevTail={prev[:12]}")
-    return 0 if ok else 1
+        return 1
+    last_file = files[-1] if files else "-"
+    print(f"files={len(files)} lastFile={last_file} prevTail={str(prev)[:12]}")
+    return 0
 
 
 if __name__ == "__main__":
