@@ -1328,7 +1328,15 @@ const server = Bun.serve({
         let vChecked = lastVerify?.checked ?? null;
         let vAnchors: number | null = lastVerify?.anchors ?? null;
         let vAgeSec = lastVerify ? Math.round((now2 - lastVerify.at) / 1000) : null;
-        if (!lastVerify || now2 - lastVerify.at > 10 * 60_000) { const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAnchors = r.anchors?.length ?? 0; vAgeSec = 0; }
+        // גל-55: האימות-מתרענק גם-כשהספר-צמח-מאז-האימות-האחרון (boot על-ספר-ריק מדווח checked=0 —
+        // לא-נעים-לטעון "קצה-לקצה" על-אימות-של-ספר-ריק). ספר-קטן = אימות-מלא-זול-בכל-קריאה.
+        const bookFilesNow = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-"));
+        let bookLinesNow = 0;
+        try { for (const f of bookFilesNow) bookLinesNow += fs.readFileSync(path.join(STATE_DIR, f), "utf8").split("\n").filter(Boolean).length; } catch { /* כנה */ }
+        if (!lastVerify || now2 - lastVerify.at > 10 * 60_000 || (lastVerify.checked ?? 0) < bookLinesNow) {
+          const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAnchors = r.anchors?.length ?? 0; vAgeSec = 0;
+          lastVerify = { at: now2, ok: r.ok, checked: r.checked, anchors: vAnchors };
+        }
         // גל-55 · G55 · השחזור-הפריטי נמדד-חי (קיפול-מלא מול יתרות-הזיכרון) — לא דגל-אתחול שהזדקן
         const rp = replayParityLive();
         // גבייה-בשיעור-החוק: מס-טהור/שירותים ≈ taxBps/10000 (±25% — עיגולים/יחידות)
