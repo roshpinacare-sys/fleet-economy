@@ -443,6 +443,8 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
     // אין-חיוב-מקור-פנים — רק-זיכוי-יעד. חוק-איזון-כפול נאכף בשער (סכום-חיובי-סופי · ref-יחיד).
     if (t.ref) rememberRef(String(t.ref)); // dedup-מהמקור: כל-apply של-ext-deposit רושם-את-ה-ref
     (to as any)[field] += amtMu;
+    if (t.to === "pool") { (pool as any)[field] += amtMu; } // גל-66b: נזילות-מנותבת-לבריכה מעמיקה-את-ה-AMM בפועל (תיקון-הבאג-הכלכלי של-הניתוב)
+    syncPoolAccounts(); // גל-66b: אפס-פער-bal-מול-var-אחרי-כל-הפקדת-חוץ
     if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: מדידת-חלק-הניתוב-לבריכה
     if (t.to === "treasury" && t.asset === "USDS") { incomeAccruedMu += amtMu; winFeed(incomeWin, t.ts, amtMu); } // גל-111·G31: ייבוא-לכספת = הכנסת-אמת · גל-112·G33: חלון-קצב
     extImportedMu += amtMu; extCount++;
@@ -471,6 +473,7 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
       const feeMu = fromF(t.fee ?? 0);
       if (t.asset === "USDS") { pool.usds += amtMu; pool.saos -= fromF((t as any).outSaos); from.saos += fromF((t as any).outSaos); pool.feesUsds += feeMu; }
       else { pool.saos += amtMu; pool.usds -= fromF((t as any).outUsds); from.usds += fromF((t as any).outUsds); pool.feesSaos += feeMu; }
+      syncPoolAccounts(); // גל-66b: bal("pool") נצמד-ל-AMM-מיד-אחרי-כל-החלפה — סוף-פנדולום-שלושת-הייצוגים
     } else {
       (to as any)[field] += amtMu;
     }
@@ -1113,7 +1116,7 @@ function replayParityLive(): { parity: boolean; deltas: number; source: string }
  * הטענה מדברת-אמת-מהפעימה-הבאה, בלי-לחכות-ל-respawn-הבא. */
 let lastParityHealAt = 0;
 function ensureParityOrHeal(rp: { parity: boolean; deltas: number; source: string }, verifyOk: boolean): any {
-  if (rp.parity || rp.source !== "live-fold" || rp.deltas <= 0 || verifyOk !== true) return rp;
+  if (rp.parity || rp.deltas <= 0 || verifyOk !== true) return rp; // גל-66b: גם-מדידה-אדומה-מהמטמון מציתה-ריפוי (הריפוי-עצמו מאפס-את-המטמון)
   const now3 = Date.now();
   if (now3 - lastParityHealAt < 60_000) return rp; // קור-רוח: לא-יותר-מריפוי-אחד-בדקה
   lastParityHealAt = now3;
