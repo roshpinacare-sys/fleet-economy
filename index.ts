@@ -452,12 +452,17 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   }
   // גל-111 · G32/G31 · חשבונאות-האוצר: מקור-אמת-יחיד בתוך-apply (ה-replay משקף-מילה-במילה — חוק-הסימטריה)
   if (t.kind === "tax" || t.kind === "dex-fee") { if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; }
-  else if (t.kind === "dividend") { incomeAccruedMu += amtMu; dividendPaidMu += amtMu; } // USDS-בלבד-בעיצוב
+  else if (t.kind === "dividend") {
+    incomeAccruedMu += amtMu; dividendPaidMu += amtMu; // USDS-בלבד-בעיצוב
+    // גל-55 · חוק-הסימטריה: מימוש-מילה-במילה-כמו-replayTail — דיבידנד-מהבריכה חייב-לרדת-מהמודול.
+    // נמדד-חי (G55): בלי-זה הכספת-קיבלה-הכנסה-שהבריכה-מעולם-לא-שילמה (fold≠module בכל-דיבידנד).
+    if (t.from === "pool") { if (t.asset === "USDS") pool.usds -= amtMu; else pool.saos -= amtMu; }
+  }
   else if (t.kind === "bond-issue") bondIssuedMu += amtMu;
   else if (t.kind === "bond-repay") bondRepaidMu += amtMu;
   else if (t.kind === "bond-interest") bondInterestMu += amtMu;
   else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: חלון-הקצב-ניזון-מהספר-עצמו
-  else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") incomeAccruedMu += amtMu; else incomeSaosMu += amtMu; } // איסוף-עמלות-בריכה
+  else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") { incomeAccruedMu += amtMu; pool.usds -= amtMu; } else { incomeSaosMu += amtMu; pool.saos -= amtMu; } } // איסוף-עמלות-בריכה · גל-55: סימטריה-עם-replayTail (המודול-משלם-בפועל)
   // גל-116·G37: חלון-המהירות — מחזור-השירותים (apply-וגם-replay — חוק-הסימטריה)
   if (t.kind === "service" && t.asset === "USDS") winFeed(serviceWin, t.ts, amtMu);
   if (t.kind === "tax" && t.to === "treasury" && t.asset === "USDS") winFeed(taxWin, t.ts, amtMu);
@@ -756,7 +761,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         }
         // גל-111 · G32 · replay-משקף-את-חשבונאות-האוצר-ואת-שיקוף-מודול-הבריכה מילה-במילה ל-apply (חוק-הסימטריה)
         if (t.kind === "ext-deposit") { /* נמדד-בענף-למעלה */ }
-        else if (t.kind === "dividend") { if (t.asset === "USDS") pool.usds -= amtMu; else pool.saos -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; incomeAccruedMu += amtMu; dividendPaidMu += amtMu; }
+        else if (t.kind === "dividend") { if (t.from === "pool") { if (t.asset === "USDS") pool.usds -= amtMu; else pool.saos -= amtMu; } bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; incomeAccruedMu += amtMu; dividendPaidMu += amtMu; } // גל-55: סימטריה-מלאה-עם-apply (מהבריכה-בלבד)
         else if (t.kind === "bond-issue") { pool.usds -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondIssuedMu += amtMu; }
         else if (t.kind === "bond-interest") { pool.usds += amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondInterestMu += amtMu; }
         else if (t.kind === "bond-repay") { pool.usds += amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondRepaidMu += amtMu; }
@@ -1075,7 +1080,12 @@ function replayParityLive(): { parity: boolean; deltas: number; source: string }
     const key = `${id}:${field}`;
     if (!seen.has(key)) { seen.add(key); deltas++; }
   };
-  for (const [id, lb] of a.fold) { bad(id, "usds", bal(id).usds, lb.usds); bad(id, "saos", bal(id).saos, lb.saos); }
+  for (const [id, lb] of a.fold) {
+    // גל-55: אמת-הבריכה = מודול-ה-AMM (bal("pool") הוא-הטלה-מתעדכנת-רק-בשמירת-סנאפשוט —
+    // השוואה-מולו-יצרה-דלתות-מלאכותיות-בין-סנכרונים). שאר-החשבונות = השורות-עצמן.
+    if (id === "pool") { bad("pool", "usds", pool.usds, lb.usds); bad("pool", "saos", pool.saos, lb.saos); continue; }
+    bad(id, "usds", bal(id).usds, lb.usds); bad(id, "saos", bal(id).saos, lb.saos);
+  }
   for (const [id, b] of balances) { if (a.fold.has(id)) continue; if (toF(b.usds) !== 0 || toF(b.saos) !== 0) deltas++; }
   const parity = deltas === 0;
   lastReplayLive = { at: Date.now(), parity, deltas };
