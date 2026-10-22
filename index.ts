@@ -1554,7 +1554,20 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     // דחף-במקומה-מצב-ישן-וקידם-את-הענן — מקור-תפרי-הספר-ההיסטוריים.
     // גל-98 · רפואת-remote-עצמית: אם-המכונה-עלתה-בלי-רימוטים — מבטיחים-אחד-לפני-כל-סוופ.
     const remote = await ensureSealRemote(dir);
-    if (opts?.trueMerge) {
+    // גל-57 · חוק-הכספת-המוחלט: המנוע לעולם לא ממזג/מאחד/מקדים-FF את עץ-החיים-של-עצמו.
+    // נמדד-חי (05:34:55 + 05:56:55): הענן-מתפצל-כל-רגע → merge-סכסוך-על-הספר →
+    // unionResolveConflicts כותב-את-הקובץ-ב-while-flush → שורה-קרועה → /verify-הבא →
+    // הסגר+רג'נזיס → הספר-מת-כל-סבב-אטימה. מעתה: ריפו-ספר = כספת (-s ours בלבד),
+    // בדיוק-כחוק-הסוופ-החיצוני — הקנון = הספר-החי, לא להפך.
+    if (fs.existsSync(path.join(dir, "state", "ledger.jsonl"))) {
+      await git(dir, ["fetch", remote, "main"]);
+      const behind = await git(dir, ["merge-base", "--is-ancestor", "HEAD", "FETCH_HEAD"]);
+      if (behind.ok) {
+        const vm = await git(dir, ["merge", "-q", "-s", "ours", "--no-edit", "-m", "vault-sync [auto-economy]: -s ours — טיפ-הענן-נרשם-כאב-קדמון · הספר-החי-הוא-הקאנון (גל-57)", "FETCH_HEAD"]);
+        if (!vm.ok && !vm.out.includes("up to date")) sealLog({ repo: name, action: "vault-merge-fail", out: vm.out.slice(0, 180) });
+        else sealLog({ repo: name, action: "vault-ours", note: "טיפ-ענן-אב-קדמון · העץ-החי-לא-נגע" });
+      }
+    } else if (opts?.trueMerge) {
       // גל-18 · מיזוג-אמת לפס-הבנאי (מיזוג-אמת-אינו-בולע — נשאר-כפי-שהוא).
       await git(dir, ["fetch", remote, "main"]);
       const mg = await git(dir, ["merge", "--no-edit", "FETCH_HEAD"]);
