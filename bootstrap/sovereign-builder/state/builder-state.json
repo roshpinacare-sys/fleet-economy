@@ -1,50 +1,50 @@
 {
   "schema": "sovereign-builder-state/v1",
-  "createdAt": "2026-10-21T22:16:29.898Z",
+  "createdAt": "2026-10-22T10:16:32.993Z",
   "backlog": [],
-  "growthLogCount": 205,
-  "acts": 12,
-  "metrics": 69,
+  "growthLogCount": 16,
+  "acts": 4,
+  "metrics": 6,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 65,
-  "sealFailures": 3,
+  "seals": 5,
+  "sealFailures": 0,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-22T11:32:12.031Z",
+  "lastAt": "2026-10-22T11:33:36.137Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "verify_chain": {
       "runs": 1,
-      "ok": 1,
-      "fail": 0,
-      "lastOkAt": "2026-10-21T22:19:52.276Z",
-      "lastResult": "ok=True checked=2210 anchors=[]",
-      "lastAt": "2026-10-21T22:19:52.276Z"
+      "ok": 0,
+      "fail": 1,
+      "lastOkAt": null,
+      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_",
+      "lastAt": "2026-10-22T10:33:27.583Z"
     },
     "ledger_stats": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-21T22:34:55.410Z",
-      "lastResult": "ok=True checked=11700 seqFirst=1 seqLast=10242",
-      "lastAt": "2026-10-21T22:34:55.410Z"
+      "lastOkAt": "2026-10-22T11:03:31.641Z",
+      "lastResult": "ok=True checked=11890 seqFirst=1 seqLast=11890",
+      "lastAt": "2026-10-22T11:03:31.641Z"
     },
     "price_report": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-21T22:49:00.480Z",
-      "lastResult": "ok=True seq=17658 price=3.670445 fees=0.38216 treasuryUsds=60493.42284",
-      "lastAt": "2026-10-21T22:49:00.480Z"
+      "lastOkAt": "2026-10-22T11:17:43.596Z",
+      "lastResult": "ok=True seq=19794 price=1.846057 fees=0.495023 treasuryUsds=60246.636048",
+      "lastAt": "2026-10-22T11:17:43.596Z"
     },
     "tools_selftest": {
       "runs": 1,
-      "ok": 0,
-      "fail": 1,
-      "lastOkAt": null,
-      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_s",
-      "lastAt": "2026-10-21T23:05:05.932Z"
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-22T11:33:36.137Z",
+      "lastResult": "ok=True tools=3 used=3",
+      "lastAt": "2026-10-22T11:33:36.137Z"
     }
   }
 }
