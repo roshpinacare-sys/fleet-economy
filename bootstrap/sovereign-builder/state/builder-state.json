@@ -1,50 +1,50 @@
 {
   "schema": "sovereign-builder-state/v1",
-  "createdAt": "2026-10-22T08:02:41.232Z",
+  "createdAt": "2026-10-21T22:16:29.898Z",
   "backlog": [],
-  "growthLogCount": 34,
-  "acts": 4,
-  "metrics": 12,
+  "growthLogCount": 175,
+  "acts": 12,
+  "metrics": 59,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 8,
+  "seals": 55,
   "sealFailures": 3,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-22T09:51:39.427Z",
+  "lastAt": "2026-10-22T09:51:58.562Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "verify_chain": {
       "runs": 1,
-      "ok": 0,
-      "fail": 1,
-      "lastOkAt": null,
-      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_",
-      "lastAt": "2026-10-22T08:06:17.465Z"
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-21T22:19:52.276Z",
+      "lastResult": "ok=True checked=2210 anchors=[]",
+      "lastAt": "2026-10-21T22:19:52.276Z"
     },
     "ledger_stats": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-22T09:34:34.986Z",
-      "lastResult": "ok=True checked=5329 seqFirst=1 seqLast=5437",
-      "lastAt": "2026-10-22T09:34:34.986Z"
+      "lastOkAt": "2026-10-21T22:34:55.410Z",
+      "lastResult": "ok=True checked=11700 seqFirst=1 seqLast=10242",
+      "lastAt": "2026-10-21T22:34:55.410Z"
     },
     "price_report": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-22T09:36:36.154Z",
-      "lastResult": "ok=True seq=5477 price=4.592085 fees=0.007765 treasuryUsds=60558.950372",
-      "lastAt": "2026-10-22T09:36:36.154Z"
+      "lastOkAt": "2026-10-21T22:49:00.480Z",
+      "lastResult": "ok=True seq=17658 price=3.670445 fees=0.38216 treasuryUsds=60493.42284",
+      "lastAt": "2026-10-21T22:49:00.480Z"
     },
     "tools_selftest": {
       "runs": 1,
-      "ok": 1,
-      "fail": 0,
-      "lastOkAt": "2026-10-22T09:51:39.426Z",
-      "lastResult": "ok=True tools=3 used=3",
-      "lastAt": "2026-10-22T09:51:39.426Z"
+      "ok": 0,
+      "fail": 1,
+      "lastOkAt": null,
+      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_s",
+      "lastAt": "2026-10-21T23:05:05.932Z"
     }
   }
 }
