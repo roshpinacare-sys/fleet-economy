@@ -452,17 +452,12 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   }
   // גל-111 · G32/G31 · חשבונאות-האוצר: מקור-אמת-יחיד בתוך-apply (ה-replay משקף-מילה-במילה — חוק-הסימטריה)
   if (t.kind === "tax" || t.kind === "dex-fee") { if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; }
-  else if (t.kind === "dividend") {
-    incomeAccruedMu += amtMu; dividendPaidMu += amtMu; // USDS-בלבד-בעיצוב
-    // גל-55 · חוק-הסימטריה: מימוש-מילה-במילה-כמו-replayTail — דיבידנד-מהבריכה חייב-לרדת-מהמודול.
-    // נמדד-חי (G55): בלי-זה הכספת-קיבלה-הכנסה-שהבריכה-מעולם-לא-שילמה (fold≠module בכל-דיבידנד).
-    if (t.from === "pool") { if (t.asset === "USDS") pool.usds -= amtMu; else pool.saos -= amtMu; }
-  }
+  else if (t.kind === "dividend") { incomeAccruedMu += amtMu; dividendPaidMu += amtMu; } // USDS-בלבד-בעיצוב
   else if (t.kind === "bond-issue") bondIssuedMu += amtMu;
   else if (t.kind === "bond-repay") bondRepaidMu += amtMu;
   else if (t.kind === "bond-interest") bondInterestMu += amtMu;
   else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: חלון-הקצב-ניזון-מהספר-עצמו
-  else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") { incomeAccruedMu += amtMu; pool.usds -= amtMu; } else { incomeSaosMu += amtMu; pool.saos -= amtMu; } } // איסוף-עמלות-בריכה · גל-55: סימטריה-עם-replayTail (המודול-משלם-בפועל)
+  else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") incomeAccruedMu += amtMu; else incomeSaosMu += amtMu; } // איסוף-עמלות-בריכה
   // גל-116·G37: חלון-המהירות — מחזור-השירותים (apply-וגם-replay — חוק-הסימטריה)
   if (t.kind === "service" && t.asset === "USDS") winFeed(serviceWin, t.ts, amtMu);
   if (t.kind === "tax" && t.to === "treasury" && t.asset === "USDS") winFeed(taxWin, t.ts, amtMu);
@@ -761,7 +756,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         }
         // גל-111 · G32 · replay-משקף-את-חשבונאות-האוצר-ואת-שיקוף-מודול-הבריכה מילה-במילה ל-apply (חוק-הסימטריה)
         if (t.kind === "ext-deposit") { /* נמדד-בענף-למעלה */ }
-        else if (t.kind === "dividend") { if (t.from === "pool") { if (t.asset === "USDS") pool.usds -= amtMu; else pool.saos -= amtMu; } bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; incomeAccruedMu += amtMu; dividendPaidMu += amtMu; } // גל-55: סימטריה-מלאה-עם-apply (מהבריכה-בלבד)
+        else if (t.kind === "dividend") { if (t.asset === "USDS") pool.usds -= amtMu; else pool.saos -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; incomeAccruedMu += amtMu; dividendPaidMu += amtMu; }
         else if (t.kind === "bond-issue") { pool.usds -= amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondIssuedMu += amtMu; }
         else if (t.kind === "bond-interest") { pool.usds += amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondInterestMu += amtMu; }
         else if (t.kind === "bond-repay") { pool.usds += amtMu; bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; bondRepaidMu += amtMu; }
@@ -901,17 +896,6 @@ function boot() {
       // dedup שורד-הפעלה-מחדש: מפיקים-חיים + poller-מילויים לא יספרו מילוי-כפול אחרי-restart
       if (Array.isArray(s.seenRefs)) for (const [k, v] of s.seenRefs as [string, number][]) seenRefs.set(k, v);
       if (!balances.has("treasury")) throw new Error("snapshot corrupt");
-      // גל-55 · G55 · לידת-ספר-חדש מסנאפשוט-חי: סנאפשוק-קיים בלי-אף-קובץ-ספר = הספר ירד-להסגר
-      // (פורנזיה/רג'נזיס). השרשרת-החדשה חייבת-להיוולד מ-GENESIS ולא מ-lastH-תלוי-של-ספר-שאיננו —
-      // אחרת השורה-הראשונה נולדת-עוגן (prev-תלוי). המצב-החי (יתרות-הסנאפשוט) נשמר-מילימטרית;
-      // genesisReconcile (מיד-אחרי-ה-boot) יכתוב את כל-היתרות כשורות-השלמה חתומות מ-GENESIS —
-      // פריטה-מלאה-אמת מהשורה-הראשונה. דור-הספר עולה (refs-השלמה-פר-ספר).
-      const hasBookFiles = fs.readdirSync(STATE_DIR).some((f) => f === "ledger.jsonl" || f.startsWith("ledger-"));
-      if (!hasBookFiles) {
-        bookGen++;
-        seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; recent = [];
-        console.log(`[fleet-economy] G55-fresh-book: סנאפשוט-חי בלי-ספר (seq=${s.seq ?? "?"} ירד-להסגר) — ספר-דור-${bookGen} נולד מ-GENESIS · היתרות-יכתבו-כשורות-השלמה-חתומות`);
-      }
       // ריפוי-עצמי בעלייה (גל-82 · שורש-התפר): אם-הספר-על-הדיסק-תפור (תפר-מיזוג-גיט
       // בין-שרשרת-מקומית-לענן) — אין-המשך-על-ספר-שבור: הסגר-כנה + זריעה-חדשה.
       // גל-49 · G49 · ריפוי-שרשרת-בעלייה: לפני-שבודקים — מאחזים. chain-reconcile משחזר
@@ -1080,12 +1064,7 @@ function replayParityLive(): { parity: boolean; deltas: number; source: string }
     const key = `${id}:${field}`;
     if (!seen.has(key)) { seen.add(key); deltas++; }
   };
-  for (const [id, lb] of a.fold) {
-    // גל-55: אמת-הבריכה = מודול-ה-AMM (bal("pool") הוא-הטלה-מתעדכנת-רק-בשמירת-סנאפשוט —
-    // השוואה-מולו-יצרה-דלתות-מלאכותיות-בין-סנכרונים). שאר-החשבונות = השורות-עצמן.
-    if (id === "pool") { bad("pool", "usds", pool.usds, lb.usds); bad("pool", "saos", pool.saos, lb.saos); continue; }
-    bad(id, "usds", bal(id).usds, lb.usds); bad(id, "saos", bal(id).saos, lb.saos);
-  }
+  for (const [id, lb] of a.fold) { bad(id, "usds", bal(id).usds, lb.usds); bad(id, "saos", bal(id).saos, lb.saos); }
   for (const [id, b] of balances) { if (a.fold.has(id)) continue; if (toF(b.usds) !== 0 || toF(b.saos) !== 0) deltas++; }
   const parity = deltas === 0;
   lastReplayLive = { at: Date.now(), parity, deltas };
@@ -1338,22 +1317,7 @@ const server = Bun.serve({
         let vChecked = lastVerify?.checked ?? null;
         let vAnchors: number | null = lastVerify?.anchors ?? null;
         let vAgeSec = lastVerify ? Math.round((now2 - lastVerify.at) / 1000) : null;
-        // גל-55: האימות-מתרענק גם-כשהספר-צמח-מאז-האימות-האחרון (boot על-ספר-ריק מדווח checked=0 —
-        // לא-נעים-לטעון "קצה-לקצה" על-אימות-של-ספר-ריק). ספר-קטן = אימות-מלא-זול-בכל-קריאה;
-        // מעל-16MB — רק-חוק-הזדקנות-ה-10דק' (אימות-מלא-על-ספר-ענק בכל-קריאה = בזבוז).
-        let bookLinesNow = 0; let bookBytes = 0;
-        try {
-          for (const f of fs.readdirSync(STATE_DIR)) {
-            if (f !== "ledger.jsonl" && !f.startsWith("ledger-")) continue;
-            const sz = fs.statSync(path.join(STATE_DIR, f)).size; bookBytes += sz;
-            if (bookBytes <= 16_000_000) bookLinesNow += fs.readFileSync(path.join(STATE_DIR, f), "utf8").split("\n").filter(Boolean).length;
-          }
-        } catch { /* כנה */ }
-        const growthRefresh = bookBytes <= 16_000_000 && (lastVerify?.checked ?? 0) < bookLinesNow;
-        if (!lastVerify || now2 - lastVerify.at > 10 * 60_000 || growthRefresh) {
-          const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAnchors = r.anchors?.length ?? 0; vAgeSec = 0;
-          lastVerify = { at: now2, ok: r.ok, checked: r.checked, anchors: vAnchors };
-        }
+        if (!lastVerify || now2 - lastVerify.at > 10 * 60_000) { const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAnchors = r.anchors?.length ?? 0; vAgeSec = 0; }
         // גל-55 · G55 · השחזור-הפריטי נמדד-חי (קיפול-מלא מול יתרות-הזיכרון) — לא דגל-אתחול שהזדקן
         const rp = replayParityLive();
         // גבייה-בשיעור-החוק: מס-טהור/שירותים ≈ taxBps/10000 (±25% — עיגולים/יחידות)
