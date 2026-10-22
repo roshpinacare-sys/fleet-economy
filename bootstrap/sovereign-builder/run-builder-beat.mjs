@@ -16,10 +16,17 @@
  */
 import { execFileSync, spawn } from "child_process";
 import fs from "fs";
+
+// גל-55 · שיעור-8b: כל-spawn = נתיב-מוחלט מאומת-קיום
+const BUN = ["/usr/local/bin/bun", "/home/z/.bun/bin/bun", "/usr/bin/bun"].find((p) => {
+  try { fs.accessSync(p, fs.constants.X_OK); return true; } catch { return false; }
+}) ?? "bun";
+const BASH = ["/usr/bin/bash", "/bin/bash"].find((p) => {
+  try { fs.accessSync(p, fs.constants.X_OK); return true; } catch { return false; }
+}) ?? "bash";
 import path from "path";
 
-const ESTATE = "/home/z/audit/fleet-economy";            // העותק-החי (קריאה-בלבד עבורנו)
-const CLONE = "/home/z/audit/fleet-economy-builder";      // ה-clone-הפרטי-שלנו לאיטום
+const ESTATE = "/home/z/audit/fleet-economy";            // העותק-החי (גל-55: גם-אתר-איטום-המצב-שלנו — אזור-bootstrap-בלבד)
 const STATE_DIR = "/home/z/audit/sovereign-builder/state";
 const STATE_FILE = `${STATE_DIR}/builder-state.json`;
 const GROWTH_LOG = `${STATE_DIR}/growth-log.jsonl`;
@@ -56,7 +63,7 @@ function ensureConsoleServer() {
     if (code === "200") return;
   } catch { /* מת-באמת */ }
   try {
-    const c = spawn("bash", ["-c", "cd /home/z/my-project && exec ./node_modules/.bin/next dev -p 3000 >> /home/z/my-project/dev.log 2>&1"], { detached: true, stdio: "ignore" });
+    const c = spawn(BASH, ["-c", "cd /home/z/my-project && exec ./node_modules/.bin/next dev -p 3000 >> /home/z/my-project/dev.log 2>&1"], { detached: true, stdio: "ignore" });
     c.unref();
     log("watchdog: שרת-הקונסולה היה מת — הוקם-מחדש (מנותק-ל-init)");
   } catch (e) { log("watchdog-שרת נכשל: " + String(e?.message ?? e).slice(-200)); }
@@ -69,7 +76,7 @@ ensureConsoleServer();
 function ensureEconomyHost() {
   try { execFileSync("pgrep", ["-f", "economy-beat-host.mjs"], { encoding: "utf8" }); return; } catch { /* אין-מארח */ }
   try {
-    const c = spawn("bun", ["/home/z/audit/fleet-economy/bootstrap/economy-beat-host.mjs"], { detached: true, stdio: "ignore" });
+    const c = spawn(BUN, ["/home/z/audit/fleet-economy/bootstrap/economy-beat-host.mjs"], { detached: true, stdio: "ignore" });
     c.unref();
     log("watchdog-גל-95: מארח-הלב-היה-מת — הוקם-מחדש (בית-קנוני-bootstrap, מנותק-ל-init)");
   } catch (e) { log("watchdog-לב נכשל: " + String(e?.message ?? e).slice(-200)); }
@@ -108,9 +115,7 @@ function log(msg) {
   try { fs.appendFileSync("/home/z/audit/sovereign-builder/beat.log", line + "\n"); } catch {}
 }
 
-function git(args, cwd = CLONE) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, stdio: ["ignore", "pipe", "pipe"] }).trim();
-}
+/* גל-55: מנגנון-ה-git-הפרטי (clone+push) הוסר — קיצון-הכותב-השני. ראה seal() למטה. */
 
 // ---------- state ----------
 function loadState() {
@@ -285,97 +290,29 @@ function actOnItem(item) {
   return { ok: false, why: "סוג-לא-מוכר" };
 }
 
-// ---------- seal (FF-טהור, merge-נקי כגיבוי, abort כ-fail-closed) ----------
-function ensureClone() {
-  if (fs.existsSync(`${CLONE}/.git`)) return true;
-  let url;
-  try { url = git(["config", "--get", "remote.origin.url"], ESTATE); } catch { return false; }
-  if (!url) return false;
-  try {
-    execFileSync("git", ["clone", "--no-hardlinks", url, CLONE], { encoding: "utf8", timeout: 180_000 });
-    return fs.existsSync(`${CLONE}/.git`);
-  } catch (e) { log(`clone-נכשל: ${String(e?.message ?? e).slice(0, 120)}`); return false; }
-}
-
-// גל-104: ריפוי-union של-קונפליקטים — רק-בקבצי-המצב-שלנו (append-only → איחוד-שורות-ללא-מחיקות;
-// .json → צד-הקנון-מנצח — נכתב-מחדש-בכל-איטום בכל-אופן). קונפליקט-מחוץ-לתיקיית-המצב → fail-closed-כנה.
-function unionHealStateConflicts() {
-  try {
-    const bad = git(["diff", "--name-only", "--diff-filter=U"]);
-    const files = bad.split("\n").map((s) => s.trim()).filter(Boolean);
-    if (!files.length) return false;
-    const PREFIX = "bootstrap/sovereign-builder/state/";
-    for (const f of files) {
-      if (!f.startsWith(PREFIX)) return false;
-      const p = `${CLONE}/${f}`;
-      if (f.endsWith(".jsonl")) {
-        const lines = fs.readFileSync(p, "utf8").split("\n");
-        const seen = new Set(); const out = [];
-        for (const l of lines) { if (/^(<<<<<<<|=======$|>>>>>>>)/.test(l)) continue; if (!seen.has(l) || !l.trim()) { out.push(l); if (l.trim()) seen.add(l); } }
-        fs.writeFileSync(p, out.join("\n"));
-      } else {
-        git(["checkout", "--theirs", "--", f]); // .json-מצב: הקנון-מנצח
-      }
-      git(["add", "--", f]);
-    }
-    const rest = git(["diff", "--name-only", "--diff-filter=U"]);
-    if (rest) return false;
-    git(["commit", "-m", "builder-merge: union-ריפוי-מצב — אף-שורת-היסטוריה-לא-נמחקה (גל-104)"]);
-    return true;
-  } catch { return false; }
-}
-
+// ---------- seal (חוק-הכספת · גל-55) ----------
+/* גל-55 · G55 · קיצון-הכותב-השני: הממצא-המדוד (2026-10-22) — ה-clone-הפרטי הזה הפך-כותב-שני
+ * של ספר-הכלכלה: מיזוגיו משכו שרשרות-ספר-זרות לקנון (+3140 שורות) ומיזוג-union של seal-host
+ * שיבב אותן אל הספר-החי → 50 עוגני-תפר → זנב-בלתי-מעוגן → רג'נזיס-שלם. ספר-hash-chain אינו
+ * זרם-נספח — איחוד-שורות עליו = השחתה-מובטחת.
+ * החוק-החדש: לבנאי אין-clone ואין-דחיפה-עצמאית. הוא כותב את מצבו ישירות לעץ-החי
+ * (bootstrap/sovereign-builder/state — אזור-ייעודי בלי-ספר), ו-seal-host אוטם-את-העץ-החי
+ * כולו בחוק-הכספת (-s ours). כותב-אחד · קנון-אחד · אפס-תפרים. */
 function seal() {
-  if (!ensureClone()) return { ok: false, why: "אין-clone" };
   try {
-    git(["fetch", "origin", "main"]);
-
-    // FF-אימוץ אם-המקומי-טהור-מאחור
-    const local = git(["rev-parse", "HEAD"]);
-    const remote = git(["rev-parse", "origin/main"]);
-    if (local !== remote) {
-      const base = git(["merge-base", "HEAD", "origin/main"]);
-      if (base === local) {
-        git(["merge", "--ff-only", "origin/main"]); // אימוץ-קנוני
-      } else if (base === remote) {
-        // הקנוני-מאחור מאיתנו (commit-מקומי שטרם-נדחף) — ממשיכים-לדחוף-FF
-      } else {
-        // מפוצלים — merge-נקי; קונפליקט-בקבצי-מצב-שלנו → union-ריפוי (גל-104); אחרת → fail-closed
-        try {
-          git(["merge", "origin/main", "--no-edit", "-m", "builder-merge: אימוץ-קנוני (union-תיקייה-דיסקרטית)"]);
-        } catch {
-          const healed = unionHealStateConflicts();
-          if (!healed) {
-            try { git(["merge", "--abort"]); } catch {}
-            return { ok: false, why: "מפוצל+קונפליקט-מחוץ-למצב — דחיית-איטום (fail-closed)" };
-          }
-          log("SEAL ⟳ union-ריפוי — קונפליקט-מצב-אוחד-ללא-מחיקות (גל-104)");
-        }
-      }
-    }
-
-    fs.mkdirSync(`${CLONE}/bootstrap/sovereign-builder/state`, { recursive: true });
-    fs.copyFileSync(STATE_FILE, `${CLONE}/bootstrap/sovereign-builder/state/builder-state.json`);
+    fs.mkdirSync(`${ESTATE}/bootstrap/sovereign-builder/state`, { recursive: true });
+    fs.copyFileSync(STATE_FILE, `${ESTATE}/bootstrap/sovereign-builder/state/builder-state.json`);
     try {
-      const tail = readGrowthTail(300).join("\n") + "\n";
-      fs.writeFileSync(`${CLONE}/bootstrap/sovereign-builder/state/growth-log.jsonl`, tail);
+      fs.writeFileSync(`${ESTATE}/bootstrap/sovereign-builder/state/growth-log.jsonl`, readGrowthTail(300).join("\n") + "\n");
     } catch {}
     try {
-      /* גל-97 · איטום-יומן-השימוש לקנון — הוכחת-השימושיות חיה-בגיט, לא-רק-בזיכרון */
+      /* גל-97 · יומן-השימוש לקנון — דרך-העץ-החי (הוכחת-השימושיות חיה-בגיט, לא-רק-בזיכרון) */
       const usage = fs.readFileSync(TOOL_USAGE_LOG, "utf8").trim().split("\n").filter(Boolean).slice(-300).join("\n") + "\n";
-      fs.writeFileSync(`${CLONE}/bootstrap/sovereign-builder/state/tool-usage.jsonl`, usage);
+      fs.writeFileSync(`${ESTATE}/bootstrap/sovereign-builder/state/tool-usage.jsonl`, usage);
     } catch {}
-
-    git(["add", "bootstrap/sovereign-builder", "bootstrap/sovereign-vm"]);
-    const staged = git(["diff", "--cached", "--name-only"]);
-    if (!staged) return { ok: true, why: "אין-שינויים-לאיטום" };
-
-    const st = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-    git(["commit", "-m", `[builder] acts=${st.acts} metrics=${st.metrics} backlog=${st.backlog.length} · צמיחה-ריבונית מאוטמת`]);
-    git(["push", "origin", "main"]);
-    return { ok: true, why: `איטום-בנאי דחוף (${staged.split("\n").length} קבצים)` };
+    return { ok: true, why: "מצב-הבנאי-נכתב-לעץ-החי — seal-host אוטם (חוק-הכספת גל-55 · אפס-clone · כותב-אחד)" };
   } catch (e) {
-    return { ok: false, why: `איטום-נכשל: ${String(e?.message ?? e).slice(0, 160)}` };
+    return { ok: false, why: `כתיבת-מצב-לעץ-החי נכשלה: ${String(e?.message ?? e).slice(0, 160)}` };
   }
 }
 

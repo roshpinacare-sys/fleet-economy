@@ -14,6 +14,11 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
+// גל-55 · שיעור-8b: כל-spawn = נתיב-מוחלט מאומת-קיום (PATH של-מארחים-חסרי-bun מת אחרי-מחזור-הפעלה)
+const BUN = ["/usr/local/bin/bun", "/home/z/.bun/bin/bun", "/usr/bin/bun"].find((p) => {
+  try { fs.accessSync(p, fs.constants.X_OK); return true; } catch { return false; }
+}) ?? "bun";
+
 const BEAT = path.join(path.dirname(new URL(import.meta.url).pathname), "run-builder-beat.mjs");
 const STATUS_FILE = "/home/z/audit/builder-beat-service-status.json";
 const HB_FILE = "/home/z/audit/builder-beat-heartbeat.json";
@@ -56,7 +61,7 @@ async function runBeat() {
     const out = fs.openSync(LOG_FILE, "a");
     const stamp = `[builder-beat] ${new Date().toISOString()} פעימה-מתחילה\n`;
     try { fs.writeSync(out, stamp); } catch {}
-    const child = spawn("bun", [BEAT], { stdio: ["ignore", out, out] });
+    const child = spawn(BUN, [BEAT], { stdio: ["ignore", out, out] });
     const killer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, HARD_TIMEOUT * 1000);
     child.on("exit", (code) => { clearTimeout(killer); try { fs.closeSync(out); } catch {} state.lastRc = code ?? 1; resolve(); });
     child.on("error", (e) => { clearTimeout(killer); try { fs.writeSync(out, `[builder-beat] spawn-שגיאה: ${String(e?.message ?? e)}\n`); fs.closeSync(out); } catch {} state.lastRc = 1; resolve(); });
