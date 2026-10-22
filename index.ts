@@ -32,6 +32,29 @@ import { CONSTITUTION, governorDecide, governorOutcome, emptyCooldowns, closureO
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
+/* גל-57 · מנעול-כותב-יחיד-בעלייה (שורש-הסחרור, נמדד-חי 2026-10-22): למנוע-מציתים-מרובים
+ * (economy-node-host · instrumentation · resurrect-fleet) — מנוע-שני שנכשל-ב-bind עדיין
+ * הספיק למוטט-דיסק ב-boot (chain-reconcile/tail-replay) בטרם-ה-port → קרעים בשורה-0.
+ * מעתה: מנעול-pid-חי — מי שלא אוחז בו יוצא מיד, בטרם-נגיעה-אחת-בדיסק. */
+const WRITER_LOCK = path.join(STATE_DIR, "writer.lock");
+function pidAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch (e: any) { return e?.code === "EPERM"; }
+}
+function acquireWriterLock(): boolean {
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    if (fs.existsSync(WRITER_LOCK)) {
+      try {
+        const l = JSON.parse(fs.readFileSync(WRITER_LOCK, "utf8"));
+        if (l?.pid && Number.isFinite(l.pid) && l.pid !== process.pid && pidAlive(l.pid) && Date.now() - (l.at ?? 0) < 24 * 3600_000) return false; // כותב-חי-וטרי — מפנים-בשקט
+        try { fs.renameSync(WRITER_LOCK, path.join(STATE_DIR, "quarantine", `${new Date().toISOString().replace(/[:.]/g, "-")}·stale-writer-lock.json`)); } catch {}
+      } catch { /* מנעול-פגום — השתלטות-כנה */ }
+    }
+    fs.writeFileSync(WRITER_LOCK, JSON.stringify({ pid: process.pid, at: Date.now(), port: PORT }) + "\n", { flag: "wx" });
+    return true;
+  } catch { return false; } // wx-נכשל = מישהו-זינק-קודם — מפסיד-בכנות
+}
+function refreshWriterLock() { try { fs.writeFileSync(WRITER_LOCK, JSON.stringify({ pid: process.pid, at: Date.now(), port: PORT }) + "\n"); } catch {} }
 const LEDGER = path.join(STATE_DIR, "ledger.jsonl");
 const SNAP = path.join(STATE_DIR, "snapshot.json");
 const EXT_FLOWS = path.join(STATE_DIR, "ext-flows.jsonl"); // גל-109 · שער-הזרימות-החוץ (G27): כותב-יחיד=console-API · קורא=המנוע
@@ -393,8 +416,10 @@ function persist(tx: Tx) {
   if (tailRing.length > 500) tailRing.shift();
 }
 
+let ledgerIno: number | null = null; // גל-57: זהות-הקובץ-החיה — חלפון-חיצוני מזוהה-מיד
 function flush() {
   if (!ledgerBuf.length) return;
+  try { const ino = fs.statSync(LEDGER).ino; if (ledgerIno !== null && ino !== ledgerIno) { console.log(`[fleet-economy] flush-guard: קובץ-הספר-הוחלף-תחתינו (ino ${ledgerIno}→${ino}) — cache-פריטה מאופס`); lastReplayLive = null; } ledgerIno = ino; } catch {}
   fs.appendFileSync(LEDGER, ledgerBuf.join("\n") + "\n");
   ledgerLines += ledgerBuf.length;
   ledgerBuf = [];
@@ -860,6 +885,8 @@ function deepTrimHeal(): { ok: boolean; keptLines: number; trimmedLines: number;
 }
 
 function boot() {
+  // גל-57: מנעול-הכותב לפני-כל-מוטציית-דיסק — נציג-שלא-אחז-בו יוצא מיד (אפס-נזק)
+  if (!acquireWriterLock()) { console.log("[fleet-economy] writer-lock-held — מנוע-חי-אחר-הוא-הכותב; יוצא-בלי-לגעת-בדיסק"); process.exit(0); }
   fs.mkdirSync(STATE_DIR, { recursive: true });
   try {
     if (fs.existsSync(SNAP)) {
@@ -902,7 +929,7 @@ function boot() {
       // את השרשרת-החיה לפי seq-מונוטוני (אפס-מחיקה, הסגר-בלבד) — מעלה-את-סולם-הריפוי
       // מעל החיתוך-העיוור והרג'נזיס. Idempotent · זול · fail-open (הסולם-הישן-מתחת).
       try {
-        const rec = Bun.spawnSync(["bun", path.join(import.meta.dir, "chain-reconcile.mjs"), "--state", STATE_DIR, "--loop", "1"], { timeout: 90_000 });
+        const rec = Bun.spawnSync([process.execPath, path.join(import.meta.dir, "chain-reconcile.mjs"), "--state", STATE_DIR, "--loop", "1"], { timeout: 90_000 }); // גל-57: execPath מוחלט (שיעור-W53)
         if (rec.exitCode === 0) console.log(`[fleet-economy] boot-chain-reconcile: ${rec.stdout.toString().trim().slice(0, 160)}`);
         else console.log(`[fleet-economy] boot-chain-reconcile: rc=${rec.exitCode} — ממשיך-בסולם-הריפוי-ההיסטורי`);
       } catch { /* כנה — הסולם-הישן-עוד-שם */ }
@@ -1049,6 +1076,7 @@ function genesisReconcile() {
   }
   flush();
   replayParity = true;
+  lastReplayLive = null; // גל-57: שורות-השלמה-נכתבו — הקיפול-הבא-חייב-להימדד-טרי
   if (wrote) console.log(`[fleet-economy] G55-genesis-reconcile: ${wrote} חשבונות-הושלמו (סך ${deltas.reduce((x, d) => x + d.delta, 0).toFixed(3)}) — קיפול-מלא == מצב-חי מעתה`);
   return { reconciled: wrote > 0, parity: true, deltas };
 }
@@ -1056,12 +1084,13 @@ function genesisReconcile() {
 /* גל-55 · G55 · שחזור-הפריטי-חי: replayParity עד-היום היה-דגל-אתחול שמזדקן-בשקט.
  * מעתה: קיפול-מלא-טרי של הספר-החי מול יתרות-הזיכרון, בכל-קריאה (cache-5דק' · תקרת-ספר
  * 64MB — מעליה דגל-ה-boot בכנות-מוצהרת). הטענה chain-integrity נשענת-על-זה-ולא על דגל. */
-let lastReplayLive: { at: number; parity: boolean; deltas: number } | null = null;
+let lastReplayLive: { at: number; parity: boolean; deltas: number; bg: number } | null = null;
 function replayParityLive(): { parity: boolean; deltas: number; source: string } {
   let bytes = 0;
   try { for (const f of fs.readdirSync(STATE_DIR)) if (f === "ledger.jsonl" || f.startsWith("ledger-")) bytes += fs.statSync(path.join(STATE_DIR, f)).size; } catch { /* כנה */ }
   if (bytes > 64_000_000) return { parity: replayParity, deltas: -1, source: `boot-flag (ספר ${Math.round(bytes / 1_000_000)}MB מעל-תקרת-הקיפול-החי)` };
-  if (lastReplayLive && Date.now() - lastReplayLive.at < 300_000) return { parity: lastReplayLive.parity, deltas: lastReplayLive.deltas, source: "cache<5דק'" };
+  // גל-57 · cache-מודע-דור: cache שנולד-בדור-ספר-אחר אינו-אמת — רג'נזיס/ריפוי = קיפול-טרי מיד
+  if (lastReplayLive && lastReplayLive.bg === bookGen && Date.now() - lastReplayLive.at < 300_000) return { parity: lastReplayLive.parity, deltas: lastReplayLive.deltas, source: "cache<5דק'" };
   const a = auditFullReplay();
   const EPS = 0.01; const seen = new Set<string>(); let deltas = 0;
   const bad = (id: string, field: string, liveMu: bigint, foldMu: bigint) => {
@@ -1073,7 +1102,7 @@ function replayParityLive(): { parity: boolean; deltas: number; source: string }
   for (const [id, lb] of a.fold) { bad(id, "usds", bal(id).usds, lb.usds); bad(id, "saos", bal(id).saos, lb.saos); }
   for (const [id, b] of balances) { if (a.fold.has(id)) continue; if (toF(b.usds) !== 0 || toF(b.saos) !== 0) deltas++; }
   const parity = deltas === 0;
-  lastReplayLive = { at: Date.now(), parity, deltas };
+  lastReplayLive = { at: Date.now(), parity, deltas, bg: bookGen };
   return { parity, deltas, source: "live-fold" };
 }
 
@@ -1737,6 +1766,7 @@ const g35Working = workingCapitalBootstrap(); // גל-114·G35: הון-עובד-
 ingestExtFlows(); // גל-109 · שער-הזרימות-החוץ: אחרי-boot (seenRefs-כבר-שוחזר → dedup-חוצה-דורות)
 setInterval(tick, TICK_MS);
 setInterval(snapshotSave, SNAP_MS);
+setInterval(refreshWriterLock, 15 * 60_000); // גל-57: דופק-מנעול-חי
 process.on("exit", () => { try { flush(); snapshotSave(); } catch {} });
 
 /* ── רשת-ביטחון למילויי-דקס (poller): כל-עסקה שנרשמה בפועל במנוע-הדקס (DexTrade —
