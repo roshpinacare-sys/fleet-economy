@@ -119,7 +119,7 @@ let winAttempts = 0, winRejected = 0, lastGovAcc: number | null = null;
 function rej() { rejected++; winRejected++; }
 let errors = 0;
 let bootedAt = Date.now();
-let lastVerify: { at: number; ok: boolean; checked: number } | null = null;
+let lastVerify: { at: number; ok: boolean; checked: number; anchors: number } | null = null;
 let sealing = false; // חוק-גל-82: מנוע-קפוא-בזמן-אטימת-כספת (אף-כתיבת-מדינה)
 const tailRing: Tx[] = []; // last 500 for /ledger reads
 
@@ -827,6 +827,15 @@ function deepTrimHeal(): { ok: boolean; keptLines: number; trimmedLines: number;
     if (!breakFile) return { ok: false, keptLines: prefix.length, trimmedLines: 0, brokenAt: null, lastKeptSeq: lastSeq }; // אין-שבר-מוחש — כנה
     // חוק-זנב-בלתי-מעוגן (Z2-15): עוגן-טרמינלי-בלי-יורש-מוכח → מורד-מהקידומת (להסגר-עם-הזנב)
     while (prefix.length && prefix[prefix.length - 1].anchor) prefix.pop();
+    // גל-55 · G55 · חוק-התאמת-הכותב: קיצוץ-זנב חוקי רק אם הקידומת-השמורה מסתיימת בדיוק בראש-השרשרת-החיה
+    // של הכותב (seq,lastH) — אחרת השורה-הבאה-שהכותב-יכתוב לא תשרשר מהקובץ → תפר→עוגן→רג'נזיס (הנמדד-חי:
+    // deep-trim ב-03:58:26 ורג'נזיס ב-03:58:38 — 12 שניות של כאוס). הכותב-החי הוא-האמת: מה שאינו
+    // מתחבר-אליו — יורד-להסגר-ברג'נזיס-מהזיכרון, לא בקיצוץ-שייצור-תפר-חדש.
+    const tailInfo = (() => { try { const t = JSON.parse(prefix[prefix.length - 1].line); return { seq: t.seq as number, h: t.h as string }; } catch { return { seq: -1, h: "" }; } })();
+    if (!prefix.length || tailInfo.seq !== seq || tailInfo.h !== lastH) {
+      console.log(`[fleet-economy] deep-trim-נדחה (חוק-התאמת-הכותב): זנב-הקידומת seq=${tailInfo.seq} ≠ ראש-הכותב seq=${seq} — רג'נזיס-מהזיכרון-היא-הריפוי-הכנה`);
+      return { ok: false, keptLines: prefix.length, trimmedLines: 0, brokenAt, lastKeptSeq: tailInfo.seq };
+    }
     if (prefix.length < DEEP_TRIM_MIN) return { ok: false, keptLines: prefix.length, trimmedLines: 0, brokenAt, lastKeptSeq: lastSeq };
     const lastKeptSeq = (() => { try { return JSON.parse(prefix[prefix.length - 1].line).seq as number; } catch { return 0; } })();
     // הסגר: זנב-קובץ-השבר + כל-הקבצים-שאחריו — אפס-מחיקה
@@ -861,6 +870,7 @@ function boot() {
         ? { saos: fromF(Number(s.pool.saos ?? 0)), usds: fromF(Number(s.pool.usds ?? 0)), feesUsds: fromF(Number(s.pool.feesUsds ?? 0)), feesSaos: fromF(Number(s.pool.feesSaos ?? 0)) }
         : { saos: fromF(POOL_SAOS), usds: fromF(POOL_USDS), feesUsds: 0n, feesSaos: 0n };
       seq = s.seq ?? 0; lastH = s.lastH ?? lastH;
+      bookGen = Number(s.bg) > 0 ? Number(s.bg) : 1; // גל-55: דור-הספר-שורד-דורות
       byKind = s.byKind ?? {}; byAccount = s.byAccount ?? {}; rejected = s.rejected ?? 0; errors = s.errors ?? 0;
       ledgerFileNo = s.ledgerFileNo ?? 0;
       ingestOk = s.ingestOk ?? 0; ingestDedup = s.ingestDedup ?? 0; ingestFailed = s.ingestFailed ?? 0; ingestBad = s.ingestBad ?? 0;
@@ -916,6 +926,7 @@ function boot() {
           return { restored: true, seq, healed: "deep-trim" };
         }
         quarantineState(`boot-heal-brokenAt-${v.brokenAt}`);
+        bookGen++; // גל-55: ספר-חדש = דור-חדש (refs-השלמה-פר-ספר)
         balances = new Map();
         pool = { saos: fromF(POOL_SAOS), usds: fromF(POOL_USDS), feesUsds: 0n, feesSaos: 0n }; // גל-87
         seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; recent = [];
@@ -928,7 +939,7 @@ function boot() {
       if (r.replayed > 0) console.log(`[fleet-economy] boot-tail-replay: +${r.replayed} עסקאות → seq=${seq}`);
       if (v.anchors?.length) console.log(`[fleet-economy] עוגני-תפר היסטוריים: ${v.anchors.length} (${v.anchors.map((a) => a.seq).join(",")}) — רציפות-מוכחת, אפס-שכתוב. צמיחה-מעבר = אזעקה`);
       // גל-111 · מדידת-SVI: אימות-ה-boot מציב-את-lastVerify מיד — עמוד-שלמות-הספר-במדד-הריבונות-רואה-אמת-מהרגע-הראשון
-      lastVerify = { at: Date.now(), ok: true, checked: v.checked };
+      lastVerify = { at: Date.now(), ok: true, checked: v.checked, anchors: v.anchors?.length ?? 0 };
       return { restored: true, seq };
     }
   } catch { /* snapshot פגום → זריעה-כנה מחדש */ }
@@ -977,6 +988,11 @@ function auditFullReplay() {
 }
 
 let replayParity = false; // G35 · נקבע-ב-boot (אמת-מדידה, לא-טענה) · חשוף-ב-/verify
+/* גל-55 · G55 · דור-הספר: עולה בכל-רג'נזיס (boot/regenesis-חי). refs-השלמות-הגנזיות מוקפים-דור —
+ * האידמפוטנטיות היא-פר-ספר ולא פר-היסטוריה-כולה: אחרי-רג'נזיס, הפערים-המתוקנים-בספר-הקודם
+ * (שירד-להסגר) חייבים-להיכתב-מחדש-בספר-החדש — אחרת הקיפול-מעולם לא ישווה-למצב-החי
+ * (הנמדד: הספר-הטרי-מ-03:58 בלי-שורות-השלמה → שחזור-פריטי-שקרי לנצח). */
+let bookGen = 1;
 function genesisReconcile() {
   const a = auditFullReplay();
   const EPS = 0.01;
@@ -993,35 +1009,66 @@ function genesisReconcile() {
   for (const [id, lb] of a.fold) { push(id, "usds", bal(id).usds, lb.usds); push(id, "saos", bal(id).saos, lb.saos); }
   for (const [id, b] of balances) { if (a.fold.has(id)) continue; push(id, "usds", b.usds, 0n); push(id, "saos", b.saos, 0n); }
   if (!deltas.length) { replayParity = true; return { reconciled: false, parity: true, deltas: [] }; }
-  let h = lastH; let s = seq;
-  const out: string[] = [];
+  const out: Tx[] = [];
   for (const { id, field, delta, kind } of deltas) {
     const isCorr = kind === "reconcile-adjustment";
     // גל-116·G37·תיקון-שורש-1: ה-ref-היה-פר-חשבון — פער-חדש-באותו-חשבון (מירוץ-flush-בין-boots)
     // היה-נדחה-בשקט (ref-כבר-נראה) ⇒ replayParity=false-לנצח-בלי-רישום. מעתה: ה-ref-חתום-על-
-    // החשבון+השדה+גודל-הפער — פער-חדש=רשומה-חדשה-מתועדת · פער-זהה=אידמפוטנטיות-אמת.
+    // החשבון+השדה+גודל-הפער · גל-55: וגם-על-דור-הספר — פער-חדש=רשומה-חדשה-מתועדת · פער-זהה-באותו-ספר=אידמפוטנטיות-אמת.
     const dhash = createHash("sha256").update(`${id}|${field}|${delta.toFixed(6)}`).digest("hex").slice(0, 6);
-    const ref = isCorr ? `genesis-reconcile-corr-v3-${id}-${field}-${dhash}` : `genesis-reconcile-v3-${id}-${field}-${dhash}`;
-    if (seenRefs.has(ref)) continue; // אידמפוטנטיות-אמת: אותו-פער-בדיוק-כבר-תוקן-בספר
-    const t = { seq: s + 1, ts: Date.now(), kind, from: "ext:genesis", to: id, asset: field === "usds" ? "USDS" : "SAOS", amount: delta, reason: isCorr
-      ? "תיקון-רשומות-השלמה-כפולות (G35→G37): הפער-המתוקן-הופיע-שוב-בגודל-שונה — ה-ref-הישן-היה-פר-חשבון-ודחה-בשקט. מעתה-פער-חדש=רשומה-חדשה · אפס-אפקט-חי"
-      : "השלמת-פער-גנזית (G35→G37): קיפול-מלא-של-הלדגר הראה-פער-מול-המצב-החי (כולל-SAOS-מהעידן-המפוצל) — מתועד-כאן · אפס-אפקט-חי · מקור-חוץ-חוקי", ref };
-    h = createHash("sha256").update(JSON.stringify({ ...t, prev: h })).digest("hex").slice(0, 32);
-    out.push(JSON.stringify({ ...t, h }));
-    rememberRef(ref);
-    s = t.seq;
+    const ref = `${isCorr ? "genesis-reconcile-corr" : "genesis-reconcile"}-v3-bg${bookGen}-${id}-${field}-${dhash}`;
+    if (seenRefs.has(ref)) continue; // אידמפוטנטיות-אמת: אותו-פער-בדיוק-כבר-תוקן-בספר-הנוכחי
+    out.push({ seq: seq + 1, ts: Date.now(), kind, from: "ext:genesis", to: id, asset: field === "usds" ? "USDS" : "SAOS", amount: delta, reason: isCorr
+      ? "תיקון-רשומות-השלמה-כפולות (G35→G55): הפער-המתוקן-הופיע-שוב-בגודל-שונה — ה-ref-הישן-היה-פר-חשבון-ודחה-בשקט. מעתה-פער-חדש=רשומה-חדשה · אפס-אפקט-חי"
+      : "השלמת-פער-גנזית (G35→G55): קיפול-מלא-של-הלדגר הראה-פער-מול-המצב-החי (כולל-SAOS-מהעידן-המפוצל) — מתועד-כאן · אפס-אפקט-חי · מקור-חוץ-חוקי", ref } as Tx);
   }
   if (!out.length) {
     // גל-116·G37: אין-יותר-דילוג-שקט — הפערים-כבר-מתוקנים-בספר-בגודל-הזה ⇒ פריטה-מלאה
     replayParity = true;
-    console.log(`[fleet-economy] G37-genesis-reconcile: ${deltas.length} פערים-כבר-מתועדים-בספר (refs-זהים) — parity=true (אידמפוטנטיות-אמת)`);
+    console.log(`[fleet-economy] G55-genesis-reconcile: ${deltas.length} פערים-כבר-מתועדים-בספר (refs-זהים) — parity=true (אידמפוטנטיות-אמת)`);
     return { reconciled: false, parity: true, deltas };
   }
-  fs.appendFileSync(LEDGER, out.join("\n") + "\n");
-  seq = s; lastH = h;
+  /* גל-55 · G55 · נתיב-כתיבה-אחיד: השורות נחתמות-בשרשרת-החיה (sealTx) ועוברות דרך
+   * ה-buffer→flush→tailRing בדיוק-כמו-כל-עסקה — אפס-כתיבה-ישירה-לקובץ (הנתיב-הישן
+   * appendFileSync ישר על הדיסק היה-מסוכן-למירוץ-מול-ה-buffer של הכותב). */
+  let wrote = 0;
+  for (const t of out) {
+    const signed = sealTx({ ...t, seq: seq + 1 });
+    if (seenRefs.has(signed.ref ?? "")) continue; // תחרות-בין-שורות-עצמן (אותו-dhash) — אידמפוטנטיות
+    seq = signed.seq; lastH = signed.h;
+    rememberRef(String(signed.ref));
+    ledgerBuf.push(JSON.stringify(signed));
+    tailRing.push(signed); if (tailRing.length > 500) tailRing.shift();
+    wrote++;
+  }
+  flush();
   replayParity = true;
-  console.log(`[fleet-economy] G37-genesis-reconcile: ${deltas.length} חשבונות-הושלמו (סך ${deltas.reduce((x, d) => x + d.delta, 0).toFixed(3)}) — קיפול-מלא == מצב-חי מעתה`);
-  return { reconciled: true, parity: true, deltas };
+  if (wrote) console.log(`[fleet-economy] G55-genesis-reconcile: ${wrote} חשבונות-הושלמו (סך ${deltas.reduce((x, d) => x + d.delta, 0).toFixed(3)}) — קיפול-מלא == מצב-חי מעתה`);
+  return { reconciled: wrote > 0, parity: true, deltas };
+}
+
+/* גל-55 · G55 · שחזור-הפריטי-חי: replayParity עד-היום היה-דגל-אתחול שמזדקן-בשקט.
+ * מעתה: קיפול-מלא-טרי של הספר-החי מול יתרות-הזיכרון, בכל-קריאה (cache-5דק' · תקרת-ספר
+ * 64MB — מעליה דגל-ה-boot בכנות-מוצהרת). הטענה chain-integrity נשענת-על-זה-ולא על דגל. */
+let lastReplayLive: { at: number; parity: boolean; deltas: number } | null = null;
+function replayParityLive(): { parity: boolean; deltas: number; source: string } {
+  let bytes = 0;
+  try { for (const f of fs.readdirSync(STATE_DIR)) if (f === "ledger.jsonl" || f.startsWith("ledger-")) bytes += fs.statSync(path.join(STATE_DIR, f)).size; } catch { /* כנה */ }
+  if (bytes > 64_000_000) return { parity: replayParity, deltas: -1, source: `boot-flag (ספר ${Math.round(bytes / 1_000_000)}MB מעל-תקרת-הקיפול-החי)` };
+  if (lastReplayLive && Date.now() - lastReplayLive.at < 300_000) return { parity: lastReplayLive.parity, deltas: lastReplayLive.deltas, source: "cache<5דק'" };
+  const a = auditFullReplay();
+  const EPS = 0.01; const seen = new Set<string>(); let deltas = 0;
+  const bad = (id: string, field: string, liveMu: bigint, foldMu: bigint) => {
+    const d = +toF(liveMu - foldMu).toFixed(6);
+    if (Math.abs(d) <= EPS) return;
+    const key = `${id}:${field}`;
+    if (!seen.has(key)) { seen.add(key); deltas++; }
+  };
+  for (const [id, lb] of a.fold) { bad(id, "usds", bal(id).usds, lb.usds); bad(id, "saos", bal(id).saos, lb.saos); }
+  for (const [id, b] of balances) { if (a.fold.has(id)) continue; if (toF(b.usds) !== 0 || toF(b.saos) !== 0) deltas++; }
+  const parity = deltas === 0;
+  lastReplayLive = { at: Date.now(), parity, deltas };
+  return { parity, deltas, source: "live-fold" };
 }
 
 /* גל-114·G35 · הצבת-הון-עצל: מאמת-האתחול אינו-שחקן-כלכלי — 55,774$-ישבו-מחוץ-למחזור
@@ -1167,7 +1214,8 @@ function snapshotSave() {
     incomeAccrued: toF(incomeAccruedMu), wagePaid: toF(wagePaidMu), wageBlocked, incomeSaos: toF(incomeSaosMu), // גל-111·G31-מומש
     dividendPaid: toF(dividendPaidMu), dividendRounds, bondIssued: toF(bondIssuedMu), bondRepaid: toF(bondRepaidMu), bondInterest: toF(bondInterestMu), bondLastTs, // גל-111·G32
     gov: { policy: govLawNow(), pending: govPending, cooldowns: govCooldowns, stats: govStats }, // גל-115·G36: מצב-המושל-שורד-דורות
-    seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP) };
+    seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP),
+    bg: bookGen }; // גל-55: דור-הספר-שורד-דורות
   const tmp = SNAP + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(obj));
   fs.renameSync(tmp, SNAP);
@@ -1233,6 +1281,7 @@ const server = Bun.serve({
               console.log(`[fleet-economy] runtime-heal-deep-trim: קידומת-חיה ${deep.keptLines} שורות · זנב-להסגר ${deep.trimmedLines} · המצב-החי-נשמר`);
             } else {
               quarantineState(`runtime-heal-brokenAt-${r.brokenAt}`);
+              bookGen++; // גל-55: ספר-חדש = דור-חדש (refs-השלמה-פר-ספר — הספר-הטרי-חייב-שורות-השלמה-עצמאיות)
               seq = 0; lastH = "GENESIS"; ledgerBuf = []; ledgerLines = 0; ledgerFileNo = 0;
               const rec = apply({
                 seq: 1, ts: Date.now(), kind: "recovery", from: "treasury", to: "treasury",
@@ -1241,12 +1290,16 @@ const server = Bun.serve({
               });
               flush();
               snapshotSave();
-              sealLog({ action: "runtime-book-heal", brokenAt: r.brokenAt, recoverySeq: rec?.seq ?? null });
+              // גל-55 · G55: השלמת-הפערים-בספר-הטרי-מיד — המצב-החי (הזיכרון) חייב-להיות-מגולגל
+              // בספר-החתום-החדש בשורות-השלמה חתומות, אחרת השחזור-הפריטי יהיה-שקרי-לנצח.
+              try { genesisReconcile(); flush(); snapshotSave(); } catch { /* כנה — הטענה-תדווח-חוסר-פריטה */ }
+              sealLog({ action: "runtime-book-heal", brokenAt: r.brokenAt, recoverySeq: rec?.seq ?? null, bookGen });
             }
           } catch { /* כנה — הדיווח-על-השבר-יוצא-בכנות-בכל-מקרה */ }
         }
-        lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked };
-        return Response.json({ ...r, replayParity });
+        lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked, anchors: r.anchors?.length ?? 0 };
+        const rp = replayParityLive();
+        return Response.json({ ...r, anchorsCount: r.anchors?.length ?? 0, replayParity, replayLive: rp });
       }
       /* ── גל-116 · G37 · GET /claims — פנקס-הטענות-החי-של-הכלכלה ──
        * כל-טענה = מבחן-פלסיבילי-מכונה עם מדידה-טרייה (S-grade-מוכן לפדרציה ולעמיתים —
@@ -1262,8 +1315,11 @@ const server = Bun.serve({
         // שלמות-שרשרת: lastVerify-טרי-או-אימות-חי (verifyChain-קריאה-בלבד — הריפוי-חי-רק-ב-/verify)
         let vOk = lastVerify?.ok ?? null;
         let vChecked = lastVerify?.checked ?? null;
+        let vAnchors: number | null = lastVerify?.anchors ?? null;
         let vAgeSec = lastVerify ? Math.round((now2 - lastVerify.at) / 1000) : null;
-        if (!lastVerify || now2 - lastVerify.at > 10 * 60_000) { const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAgeSec = 0; }
+        if (!lastVerify || now2 - lastVerify.at > 10 * 60_000) { const r = verifyChain(); vOk = r.ok; vChecked = r.checked; vAnchors = r.anchors?.length ?? 0; vAgeSec = 0; }
+        // גל-55 · G55 · השחזור-הפריטי נמדד-חי (קיפול-מלא מול יתרות-הזיכרון) — לא דגל-אתחול שהזדקן
+        const rp = replayParityLive();
         // גבייה-בשיעור-החוק: מס-טהור/שירותים ≈ taxBps/10000 (±25% — עיגולים/יחידות)
         const svc = m2.serviceUsds1h ?? 0, taxPure = toF(taxLastHourMu());
         const taxMeasured = svc > 5 ? taxPure / svc : null;
@@ -1276,7 +1332,7 @@ const server = Bun.serve({
         const treasUsds = toF(bal("treasury").usds);
         const runwayHours = burn2 > 0 ? treasUsds / burn2 : Infinity;
         const claims = [
-          { id: "chain-integrity", claim: "השרשרת-מאומתת-מקצה-לקצה-והשחזור-פריטי (replayParity)", pass: vOk === true && replayParity === true, measured: { verifyOk: vOk, checked: vChecked, replayParity, verifyAgeSec: vAgeSec } },
+          { id: "chain-integrity", claim: "השרשרת-מאומתת-מקצה-לקצה (אפס-עוגני-תפר) והשחזור-הפריטי-חי (replayParity)", pass: vOk === true && vAnchors === 0 && rp.parity === true, measured: { verifyOk: vOk, checked: vChecked, anchors: vAnchors, replayParity: rp.parity, replayDeltas: rp.deltas, replaySource: rp.source, verifyAgeSec: vAgeSec, bookGen } },
           { id: "law-is-book", claim: "החוק-החי-שווה-לשורת-החוק-החתומה-בספר (אפס-חוק-מפלג)", pass: govLawFromBook ? JSON.stringify(govLawFromBook.law) === JSON.stringify(lawNow) : null, measured: { fromBook: govLawFromBook?.law ?? null, live: lawNow, bookAt: govLawFromBook?.at ?? null, src: govLawFromBook?.src ?? null } },
           { id: "no-negative-balances", claim: "אף-חשבון-אינו-שלילי (USDS·SAOS — חשבונאות-כפולה-שלמה)", pass: minUsds >= 0 && minSaos >= 0, measured: { minUsds, minSaos, accounts: balances.size } },
           { id: "windows-alive", claim: "חלונות-המדידה-חיים (שכר ושירותים בשעה האחרונה)", pass: m2.wageRows1h > 0 && svc > 0, measured: { wageRows1h: m2.wageRows1h, wageUsds1h: +m2.wageUsds1h.toFixed(2), serviceUsds1h: +svc.toFixed(2) } },
