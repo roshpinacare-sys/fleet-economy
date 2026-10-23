@@ -435,3 +435,134 @@ describe("G32 · חוק-הון-הריבון", () => {
     expect(sovBondHeadroom(st3, cfg)).toBe(fromF(60));
   });
 });
+
+/* ══ G67 · קוטל-פנדולום-ה-pool · אחדות-ייצוג ═══════════════════════════════════
+ * הממצא-החי (2026-10-23 · claims :3016 · chain-integrity 7/8): pool.usds/saos
+ * התהפכו-וגדלו בכל-ריפוי (−3.51→+5.86 · +2.04→−3.55) — פיצול-ייצוגים בין
+ * bal("pool") למודול-ה-AMM. החוק-החדש (מילה-במילה בשני-המחילים — חי ו-replay):
+ *  1. אחרי-כל-החלפה: bal("pool") == מודול-ה-AMM (sync-מיידי).
+ *  2. הפקדה-לבריכה מעמיקה-אמת-ה-AMM בתוך-המחיל-עצמו (כוונת-G66b, בלי-תיקוני-חוץ-ספר).
+ *  3. שורות-אוצר הנוגעות-בבריכה (dividend/bond): תנועת-bal + תנועת-מודול + sync —
+ *     ההתכנסות-היציבה-של-המצב-הקיים, נעולה-כאן-לנצח.
+ * ה-invariant: אחרי-כל-שורה — bal("pool") == מודול (אפס-פיצול-ייצוגים · אפס-פנדולום). */
+function lawApplyG67(st: { bal: Map<string, Bal>; pool: { saos: Mu; usds: Mu; feesUsds: Mu; feesSaos: Mu } }, t: any): boolean {
+  const from = st.bal.get(t.from)!; const to = st.bal.get(t.to)!;
+  const field = t.asset === "USDS" ? "usds" as const : "saos" as const;
+  const amt = BigInt(t.amount);
+  if (t.kind === "ext-deposit") { // גל-109: אין-חיוב-מקור · G67: העמקת-AMM-בתוך-המחיל
+    to[field] += amt;
+    if (t.to === "pool") st.pool[field] += amt;
+    return true;
+  }
+  if (from[field] < amt) return false;
+  from[field] -= amt;
+  if (t.kind === "swap") {
+    if (t.asset === "USDS") { st.pool.usds += amt; st.pool.saos -= BigInt(t.outSaos); from.saos += BigInt(t.outSaos); st.pool.feesUsds += BigInt(t.fee); }
+    else { st.pool.saos += amt; st.pool.usds -= BigInt(t.outUsds); from.usds += BigInt(t.outUsds); st.pool.feesSaos += BigInt(t.fee); }
+    st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos; // G67: sync-החלפה
+  } else {
+    to[field] += amt;
+    if (t.from === "pool" || t.to === "pool") { // גל-111: צל-הבריכה-מודול-אמת (התכנסות-המצב-הקיים · נעול-לנצח)
+      if (t.from === "pool") st.pool[field] -= amt;
+      if (t.to === "pool") st.pool[field] += amt;
+      st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos;
+    }
+  }
+  return true;
+}
+function mkG67State() {
+  const st = { bal: new Map<string, Bal>(), pool: { saos: fromF(8_000), usds: fromF(8_030), feesUsds: 0n, feesSaos: 0n } };
+  for (const id of IDS) st.bal.set(id, { usds: 0n, saos: 0n, saosStaked: 0n });
+  st.bal.get("treasury")!.usds = fromF(60_000);
+  st.bal.get("pool")!.usds = fromF(8_030); st.bal.get("pool")!.saos = fromF(8_000);
+  for (const s of ["s1", "s2", "s3"]) { st.bal.get(s)!.usds = fromF(900); st.bal.get(s)!.saos = fromF(25); }
+  return st;
+}
+describe("G67 · אחדות-ייצוג-הבריכה — קוטל-פנדולום-ה-pool", () => {
+  test("אחרי-כל-שורה: bal(\"pool\") == מודול-ה-AMM (300 שורות-מעורבות · אפס-פיצול)", () => {
+    for (let trial = 0; trial < 100; trial++) {
+      const st = mkG67State();
+      let seq = 0;
+      for (let i = 0; i < 300; i++) {
+        const r = Math.random();
+        if (r < 0.45) { // החלפה
+          const from = ["s1", "s2", "s3", "treasury"][Math.floor(Math.random() * 4)]!;
+          const buySaos = Math.random() < 0.5;
+          const amt = fromF(rnd6(0.5, 40));
+          const rIn = buySaos ? st.pool.usds : st.pool.saos, rOut = buySaos ? st.pool.saos : st.pool.usds;
+          const out = ammOut(rIn, rOut, amt, FEE_BPS);
+          if (out <= 0n || out > rOut / 2n) continue;
+          const { fee } = splitFee(amt, FEE_BPS);
+          const t: any = { seq: ++seq, ts: 0, kind: "swap", from, to: "pool", asset: buySaos ? "USDS" : "SAOS", amount: amt, reason: "t", fee };
+          if (buySaos) t.outSaos = out; else t.outUsds = out;
+          if (!lawApplyG67(st, t)) continue; // דחיית-יתרה = חוק-כנה, לא-כשל
+        } else if (r < 0.65) { // הפקדת-חוץ (ניתוב-G28: כספת+בריכה)
+          const amt = fromF(rnd6(1, 120));
+          const { poolMu, treMu } = splitRouting(amt, 25);
+          if (treMu > 0n) expect(lawApplyG67(st, { seq: ++seq, ts: 0, kind: "ext-deposit", from: "ext:venue", to: "treasury", asset: "USDS", amount: treMu, reason: "t" })).toBe(true);
+          if (poolMu > 0n) expect(lawApplyG67(st, { seq: ++seq, ts: 0, kind: "ext-deposit", from: "ext:venue", to: "pool", asset: "USDS", amount: poolMu, reason: "t" })).toBe(true);
+        } else if (r < 0.8) { // דיבידנד-עמלות (אוצר → מהבריכה)
+          const take = fromF(rnd6(0.02, 2));
+          if (st.pool.usds >= take && st.bal.get("pool")!.usds >= take)
+            expect(lawApplyG67(st, { seq: ++seq, ts: 0, kind: "dividend", from: "pool", to: "treasury", asset: "USDS", amount: take, reason: "t" })).toBe(true);
+        } else if (r < 0.9) { // ריבית-איגרת (מהכספת-אל-הבריכה)
+          const i = fromF(rnd6(0.01, 1));
+          if (st.bal.get("treasury")!.usds >= i)
+            expect(lawApplyG67(st, { seq: ++seq, ts: 0, kind: "bond-interest", from: "treasury", to: "pool", asset: "USDS", amount: i, reason: "t" })).toBe(true);
+        } else { // שירות רגיל (שטח-מת)
+          const from = ["s1", "s2", "s3"][Math.floor(Math.random() * 3)]!;
+          expect(lawApplyG67(st, { seq: ++seq, ts: 0, kind: "service", from, to: "treasury", asset: "USDS", amount: fromF(rnd6(0.1, 5)), reason: "t" })).toBe(true);
+        }
+        // ה-invariant המנצח — בכל-צעד, ללא-יוצא-מן-הכלל:
+        expect(st.bal.get("pool")!.usds).toBe(st.pool.usds);
+        expect(st.bal.get("pool")!.saos).toBe(st.pool.saos);
+      }
+    }
+  });
+  test("סימטריית apply/replay מורחבת: זרימה-מעורבת + replay == מצב-חי (µ¢-מדויק)", () => {
+    for (let trial = 0; trial < 50; trial++) {
+      const live = mkG67State(); const ledger: any[] = [];
+      let seq = 0;
+      const gen = (st: typeof live): any => {
+        const r = Math.random();
+        if (r < 0.5) {
+          const from = ["s1", "s2", "s3", "treasury"][Math.floor(Math.random() * 4)]!;
+          const buySaos = Math.random() < 0.5;
+          const amt = fromF(rnd6(0.5, 40));
+          const rIn = buySaos ? st.pool.usds : st.pool.saos, rOut = buySaos ? st.pool.saos : st.pool.usds;
+          const out = ammOut(rIn, rOut, amt, FEE_BPS);
+          if (out <= 0n || out > rOut / 2n) return null;
+          const { fee } = splitFee(amt, FEE_BPS);
+          const t: any = { seq: ++seq, ts: 0, kind: "swap", from, to: "pool", asset: buySaos ? "USDS" : "SAOS", amount: amt, reason: "t", fee };
+          if (buySaos) t.outSaos = out; else t.outUsds = out;
+          return t;
+        }
+        const amt = fromF(rnd6(1, 80));
+        const { poolMu, treMu } = splitRouting(amt, 25);
+        return { seq: ++seq, ts: 0, kind: "ext-deposit", from: "ext:venue", to: poolMu > 0n && Math.random() < 0.5 ? "pool" : "treasury", asset: "USDS", amount: poolMu > 0n && Math.random() < 0.5 ? poolMu : treMu, reason: "t" };
+      };
+      for (let i = 0; i < 120; i++) { const t = gen(live); if (t && lawApplyG67(live, t)) ledger.push(t); }
+      const replay = mkG67State();
+      for (const t of ledger) expect(lawApplyG67(replay, t)).toBe(true); // ה-replay משקף-מילה-במילה
+      expect(replay.bal.get("pool")!.usds).toBe(live.bal.get("pool")!.usds);
+      expect(replay.bal.get("pool")!.saos).toBe(live.bal.get("pool")!.saos);
+      expect(replay.pool.usds).toBe(live.pool.usds);
+      expect(replay.pool.saos).toBe(live.pool.saos);
+    }
+  });
+  test("תיעוד-הפגם-שנקטל: בלי-sync-החלפה — bal(\"pool\") מתפצלת-מהמודול (האדום-ההיסטורי)", () => {
+    const st = mkG67State();
+    const buySaos = true; const amt = fromF(10);
+    const rIn = st.pool.usds, rOut = st.pool.saos;
+    const out = ammOut(rIn, rOut, amt, FEE_BPS);
+    const { fee } = splitFee(amt, FEE_BPS);
+    // חוק-ישן (לפני-G67): ההחלפה מזיזה-מודול-בלבד — bal נשארת-מיושנת
+    const oldBal = st.bal.get("pool")!.usds;
+    st.pool.usds += amt; st.pool.saos -= out;
+    expect(st.bal.get("pool")!.usds).toBe(oldBal); // הפיצול-עצמו — הפנדולום
+    expect(st.bal.get("pool")!.usds).not.toBe(st.pool.usds);
+    // חוק-G67: sync-מיידי — אחדות
+    st.bal.get("pool")!.usds = st.pool.usds; st.bal.get("pool")!.saos = st.pool.saos;
+    expect(st.bal.get("pool")!.usds).toBe(st.pool.usds);
+  });
+});
