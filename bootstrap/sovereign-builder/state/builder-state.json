@@ -2,16 +2,16 @@
   "schema": "sovereign-builder-state/v1",
   "createdAt": "2026-10-23T14:02:48.543Z",
   "backlog": [],
-  "growthLogCount": 7,
-  "acts": 2,
-  "metrics": 3,
+  "growthLogCount": 10,
+  "acts": 3,
+  "metrics": 4,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 2,
+  "seals": 3,
   "sealFailures": 0,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-23T14:33:34.406Z",
+  "lastAt": "2026-10-23T14:35:56.852Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "verify_chain": {
@@ -29,6 +29,14 @@
       "lastOkAt": "2026-10-23T14:33:34.406Z",
       "lastResult": "ok=True checked=28678 seqFirst=1 seqLast=28678",
       "lastAt": "2026-10-23T14:33:34.406Z"
+    },
+    "price_report": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-23T14:35:56.852Z",
+      "lastResult": "ok=True seq=30021 price=1.684662 fees=0.355548 treasuryUsds=60210.842052",
+      "lastAt": "2026-10-23T14:35:56.852Z"
     }
   }
 }
