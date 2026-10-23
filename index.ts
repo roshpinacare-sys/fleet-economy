@@ -443,6 +443,7 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
     // אין-חיוב-מקור-פנים — רק-זיכוי-יעד. חוק-איזון-כפול נאכף בשער (סכום-חיובי-סופי · ref-יחיד).
     if (t.ref) rememberRef(String(t.ref)); // dedup-מהמקור: כל-apply של-ext-deposit רושם-את-ה-ref
     (to as any)[field] += amtMu;
+    if (t.to === "pool") (pool as any)[field] += amtMu; // G67: הפקדה-לבריכה מעמיקה-אמת-ה-AMM בתוך-המחיל-עצמו (כוונת-G66b · בלי-תיקוני-חוץ-ספר · סימטריה-מלאה)
     if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: מדידת-חלק-הניתוב-לבריכה
     if (t.to === "treasury" && t.asset === "USDS") { incomeAccruedMu += amtMu; winFeed(incomeWin, t.ts, amtMu); } // גל-111·G31: ייבוא-לכספת = הכנסת-אמת · גל-112·G33: חלון-קצב
     extImportedMu += amtMu; extCount++;
@@ -471,6 +472,7 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
       const feeMu = fromF(t.fee ?? 0);
       if (t.asset === "USDS") { pool.usds += amtMu; pool.saos -= fromF((t as any).outSaos); from.saos += fromF((t as any).outSaos); pool.feesUsds += feeMu; }
       else { pool.saos += amtMu; pool.usds -= fromF((t as any).outUsds); from.usds += fromF((t as any).outUsds); pool.feesSaos += feeMu; }
+      syncPoolAccounts(); // G67: ייצוג-אחד — bal("pool") מתיישר-מיד-אחרי-כל-החלפה (סימטריית-apply/replay מילה-במילה · קוטל-פנדולום-ה-pool)
     } else {
       (to as any)[field] += amtMu;
     }
@@ -759,6 +761,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
           // של-זנב-עם-ext-deposit תדדף-דרך-seenRefs — אפס-זיכוי-כפול).
           if (t.ref) rememberRef(String(t.ref));
           (to as any)[field] += amtMu;
+          if (t.to === "pool") (pool as any)[field] += amtMu; // G67: סימטריה מילה-במילה — העמקת-AMM-גם-ב-replay (כמו-apply)
           if (t.to === "pool") extPoolImportedMu += amtMu; // גל-109·G28: replay-משקף-apply מילה-במילה
           if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; // גל-111·G31
           extImportedMu += amtMu; extCount++;
@@ -777,6 +780,7 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
             const feeMu = fromF(t.fee ?? 0);
             if (t.asset === "USDS") { pool.usds += amtMu; pool.saos -= fromF(t.outSaos); from.saos += fromF(t.outSaos); pool.feesUsds += feeMu; }
             else { pool.saos += amtMu; pool.usds -= fromF(t.outUsds); from.usds += fromF(t.outUsds); pool.feesSaos += feeMu; }
+            bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; // G67: סימטריה מילה-במילה מול-apply (sync-החלפה · קוטל-פנדולום-ה-pool)
           } else { (to as any)[field] += amtMu; }
         }
         // גל-111 · G32 · replay-משקף-את-חשבונאות-האוצר-ואת-שיקוף-מודול-הבריכה מילה-במילה ל-apply (חוק-הסימטריה)
