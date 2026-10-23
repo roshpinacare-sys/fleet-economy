@@ -1,50 +1,50 @@
 {
   "schema": "sovereign-builder-state/v1",
-  "createdAt": "2026-10-21T22:16:29.898Z",
+  "createdAt": "2026-10-23T14:02:48.543Z",
   "backlog": [],
-  "growthLogCount": 160,
-  "acts": 12,
-  "metrics": 54,
+  "growthLogCount": 13,
+  "acts": 4,
+  "metrics": 5,
   "brainCalls": 0,
   "brainOffers": 0,
-  "seals": 50,
-  "sealFailures": 3,
+  "seals": 4,
+  "sealFailures": 0,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-22T09:01:25.201Z",
+  "lastAt": "2026-10-23T14:51:02.737Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "verify_chain": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-21T22:19:52.276Z",
-      "lastResult": "ok=True checked=2210 anchors=[]",
-      "lastAt": "2026-10-21T22:19:52.276Z"
+      "lastOkAt": "2026-10-23T14:20:50.304Z",
+      "lastResult": "ok=True checked=21243 anchors=[]",
+      "lastAt": "2026-10-23T14:20:50.304Z"
     },
     "ledger_stats": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-21T22:34:55.410Z",
-      "lastResult": "ok=True checked=11700 seqFirst=1 seqLast=10242",
-      "lastAt": "2026-10-21T22:34:55.410Z"
+      "lastOkAt": "2026-10-23T14:33:34.406Z",
+      "lastResult": "ok=True checked=28678 seqFirst=1 seqLast=28678",
+      "lastAt": "2026-10-23T14:33:34.406Z"
     },
     "price_report": {
       "runs": 1,
       "ok": 1,
       "fail": 0,
-      "lastOkAt": "2026-10-21T22:49:00.480Z",
-      "lastResult": "ok=True seq=17658 price=3.670445 fees=0.38216 treasuryUsds=60493.42284",
-      "lastAt": "2026-10-21T22:49:00.480Z"
+      "lastOkAt": "2026-10-23T14:35:56.852Z",
+      "lastResult": "ok=True seq=30021 price=1.684662 fees=0.355548 treasuryUsds=60210.842052",
+      "lastAt": "2026-10-23T14:35:56.852Z"
     },
     "tools_selftest": {
       "runs": 1,
-      "ok": 0,
-      "fail": 1,
-      "lastOkAt": null,
-      "lastResult": "הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_s",
-      "lastAt": "2026-10-21T23:05:05.932Z"
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-23T14:51:02.737Z",
+      "lastResult": "ok=True tools=3 used=3",
+      "lastAt": "2026-10-23T14:51:02.737Z"
     }
   }
 }
