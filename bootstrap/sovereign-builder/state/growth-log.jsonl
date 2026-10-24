@@ -1,66 +1,39 @@
-{"at":"2026-10-24T15:54:08.820Z","kind":"metric","ledgerSeq":2079,"ledgerLines":169358,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T15:54:08.898Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T15:54:13.127Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_chain.py /home/z/aud"}
-{"at":"2026-10-24T16:11:38.065Z","kind":"metric","ledgerSeq":22578,"ledgerLines":22578,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:11:38.319Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T16:11:40.963Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=22666 anchors=[]"}
-{"at":"2026-10-24T16:25:11.838Z","kind":"metric","ledgerSeq":34010,"ledgerLines":34010,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:25:11.875Z","kind":"playbook","tool":"ledger_stats"}
-{"at":"2026-10-24T16:25:12.025Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=34019 seqFirst=1 seqLast=34019"}
-{"at":"2026-10-24T16:27:12.798Z","kind":"metric","ledgerSeq":35238,"ledgerLines":35238,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:27:12.870Z","kind":"playbook","tool":"price_report"}
-{"at":"2026-10-24T16:27:12.892Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=35043 price=1.684269 fees=0.585791 treasuryUsds=60210.556556"}
-{"at":"2026-10-24T16:42:16.915Z","kind":"metric","ledgerSeq":null,"ledgerLines":43041,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:42:41.919Z","kind":"playbook","tool":"tools_selftest"}
-{"at":"2026-10-24T16:42:44.434Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
-{"at":"2026-10-24T16:55:18.454Z","kind":"metric","ledgerSeq":45132,"ledgerLines":45132,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:55:43.455Z","kind":"playbook","tool":"tools_selftest"}
-{"at":"2026-10-24T16:55:46.635Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"ok=True tools=3 used=3"}
-{"at":"2026-10-24T16:58:00.061Z","kind":"metric","ledgerSeq":46657,"ledgerLines":46657,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:58:00.141Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T16:58:01.385Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=46674 anchors=[]"}
-{"at":"2026-10-24T17:13:05.484Z","kind":"metric","ledgerSeq":55155,"ledgerLines":55155,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T17:13:05.557Z","kind":"playbook","tool":"ledger_stats"}
-{"at":"2026-10-24T17:13:05.784Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=55155 seqFirst=1 seqLast=55155"}
-{"at":"2026-10-24T17:25:51.868Z","kind":"metric","ledgerSeq":62599,"ledgerLines":62599,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T17:25:51.905Z","kind":"playbook","tool":"price_report"}
-{"at":"2026-10-24T17:25:51.930Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=62305 price=2.057546 fees=0.332314 treasuryUsds=60257.056678"}
-{"at":"2026-10-24T17:28:13.598Z","kind":"metric","ledgerSeq":64025,"ledgerLines":64025,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T17:28:13.671Z","kind":"playbook","tool":"tools_selftest"}
-{"at":"2026-10-24T17:28:15.598Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"ok=True tools=3 used=3"}
-{"at":"2026-10-24T17:43:18.245Z","kind":"metric","ledgerSeq":72039,"ledgerLines":72039,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T17:43:18.316Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T17:43:20.162Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=72057 anchors=[]"}
-{"at":"2026-10-24T17:55:58.753Z","kind":"metric","ledgerSeq":79396,"ledgerLines":79396,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T17:55:58.788Z","kind":"playbook","tool":"ledger_stats"}
-{"at":"2026-10-24T17:55:59.104Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=79401 seqFirst=1 seqLast=79401"}
-{"at":"2026-10-24T17:58:26.339Z","kind":"metric","ledgerSeq":80680,"ledgerLines":80680,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T17:58:26.418Z","kind":"playbook","tool":"price_report"}
-{"at":"2026-10-24T17:58:26.442Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=80660 price=2.346663 fees=0.349524 treasuryUsds=60306.134675"}
-{"at":"2026-10-24T18:13:30.856Z","kind":"metric","ledgerSeq":88980,"ledgerLines":88980,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T18:13:30.937Z","kind":"playbook","tool":"tools_selftest"}
-{"at":"2026-10-24T18:13:33.875Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"ok=True tools=3 used=3"}
-{"at":"2026-10-24T18:26:07.878Z","kind":"metric","ledgerSeq":95658,"ledgerLines":95658,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T18:26:07.914Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T18:26:10.438Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=95690 anchors=[]"}
-{"at":"2026-10-24T18:28:43.670Z","kind":"metric","ledgerSeq":97210,"ledgerLines":97210,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T18:28:43.746Z","kind":"playbook","tool":"ledger_stats"}
-{"at":"2026-10-24T18:28:44.164Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=97222 seqFirst=1 seqLast=97222"}
-{"at":"2026-10-24T18:43:45.593Z","kind":"metric","ledgerSeq":105619,"ledgerLines":105619,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T18:43:45.671Z","kind":"playbook","tool":"price_report"}
-{"at":"2026-10-24T18:43:45.694Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=105420 price=2.816131 fees=0.458573 treasuryUsds=60372.380621"}
-{"at":"2026-10-24T18:56:15.610Z","kind":"metric","ledgerSeq":112439,"ledgerLines":112439,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T18:56:15.649Z","kind":"playbook","tool":"tools_selftest"}
-{"at":"2026-10-24T18:56:19.205Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"ok=True tools=3 used=3"}
-{"at":"2026-10-24T18:58:53.448Z","kind":"metric","ledgerSeq":114033,"ledgerLines":114033,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T18:58:53.524Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T18:58:56.425Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=114061 anchors=[]"}
-{"at":"2026-10-24T19:13:57.508Z","kind":"metric","ledgerSeq":121928,"ledgerLines":121928,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T19:13:57.726Z","kind":"playbook","tool":"ledger_stats"}
-{"at":"2026-10-24T19:13:58.927Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=121942 seqFirst=1 seqLast=121942"}
-{"at":"2026-10-24T19:26:23.832Z","kind":"metric","ledgerSeq":128776,"ledgerLines":128776,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T19:26:23.867Z","kind":"playbook","tool":"price_report"}
-{"at":"2026-10-24T19:26:23.890Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=128542 price=3.295112 fees=0.465215 treasuryUsds=60435.270437"}
-{"at":"2026-10-24T19:29:07.879Z","kind":"metric","ledgerSeq":130182,"ledgerLines":130182,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T19:29:07.956Z","kind":"playbook","tool":"tools_selftest"}
-{"at":"2026-10-24T19:29:11.963Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"ok=True tools=3 used=3"}
+{"at":"2026-10-24T19:49:24.945Z","kind":"metric","ledgerSeq":2004,"ledgerLines":118059,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T19:49:25.070Z","kind":"playbook","tool":"verify_chain"}
+{"at":"2026-10-24T19:49:31.569Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_chain.py /home/z/aud"}
+{"at":"2026-10-24T19:52:38.326Z","kind":"metric","ledgerSeq":5749,"ledgerLines":5749,"beatSeq":383,"tx":null,"price":null}
+{"at":"2026-10-24T19:52:38.524Z","kind":"playbook","tool":"verify_chain"}
+{"at":"2026-10-24T19:52:38.929Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=5780 anchors=[]"}
+{"at":"2026-10-24T20:10:18.601Z","kind":"metric","ledgerSeq":40232,"ledgerLines":40232,"beatSeq":383,"tx":null,"price":null}
+{"at":"2026-10-24T20:10:18.672Z","kind":"playbook","tool":"ledger_stats"}
+{"at":"2026-10-24T20:10:18.842Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=40232 seqFirst=1 seqLast=40232"}
+{"at":"2026-10-24T20:22:31.847Z","kind":"metric","ledgerSeq":50097,"ledgerLines":50097,"beatSeq":383,"tx":null,"price":null}
+{"at":"2026-10-24T20:22:31.934Z","kind":"playbook","tool":"price_report"}
+{"at":"2026-10-24T20:22:31.975Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=49925 price=1.725045 fees=0.545264 treasuryUsds=60221.126286"}
+{"at":"2026-10-24T20:25:22.370Z","kind":"metric","ledgerSeq":51701,"ledgerLines":51701,"beatSeq":383,"tx":null,"price":null}
+{"at":"2026-10-24T20:25:22.436Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T20:25:24.396Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T20:40:28.587Z","kind":"metric","ledgerSeq":60070,"ledgerLines":60070,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T20:40:28.750Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T20:40:30.371Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T20:52:37.349Z","kind":"metric","ledgerSeq":66837,"ledgerLines":66837,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T20:52:37.385Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T20:52:39.002Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T20:55:35.637Z","kind":"metric","ledgerSeq":68490,"ledgerLines":68490,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T20:55:35.708Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T20:55:37.273Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T21:10:40.759Z","kind":"metric","ledgerSeq":77214,"ledgerLines":77214,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T21:10:40.839Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T21:10:42.443Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T21:22:44.126Z","kind":"metric","ledgerSeq":84071,"ledgerLines":84071,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T21:22:44.164Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T21:22:45.806Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T21:25:48.998Z","kind":"metric","ledgerSeq":85578,"ledgerLines":85578,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T21:25:49.067Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T21:25:50.753Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T21:40:54.647Z","kind":"metric","ledgerSeq":94103,"ledgerLines":94103,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T21:40:54.730Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T21:40:56.400Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
+{"at":"2026-10-24T21:52:51.547Z","kind":"metric","ledgerSeq":100609,"ledgerLines":100609,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T21:52:51.584Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T21:52:53.296Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
