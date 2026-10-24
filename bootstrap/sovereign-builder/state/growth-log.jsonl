@@ -1,18 +1,15 @@
-{"at":"2026-10-24T15:41:06.808Z","kind":"metric","ledgerSeq":162987,"ledgerLines":162987,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T15:41:06.879Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T15:41:11.008Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=163027 anchors=[]"}
-{"at":"2026-10-24T15:58:33.125Z","kind":"metric","ledgerSeq":172373,"ledgerLines":172373,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T15:58:33.196Z","kind":"playbook","tool":"ledger_stats"}
-{"at":"2026-10-24T15:58:33.908Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=172386 seqFirst=1 seqLast=172386"}
-{"at":"2026-10-24T16:11:51.945Z","kind":"metric","ledgerSeq":179683,"ledgerLines":179683,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:11:52.014Z","kind":"playbook","tool":"price_report"}
-{"at":"2026-10-24T16:11:52.079Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=179432 price=4.261144 fees=0.310769 treasuryUsds=60543.432178"}
-{"at":"2026-10-24T16:13:44.956Z","kind":"metric","ledgerSeq":180704,"ledgerLines":180704,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:13:45.093Z","kind":"playbook","tool":"tools_selftest"}
-{"at":"2026-10-24T16:13:53.846Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"ok=True tools=3 used=3"}
-{"at":"2026-10-24T16:28:56.904Z","kind":"metric","ledgerSeq":187416,"ledgerLines":187416,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:28:57.019Z","kind":"playbook","tool":"verify_chain"}
-{"at":"2026-10-24T16:29:05.798Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=187430 anchors=[]"}
-{"at":"2026-10-24T16:42:10.400Z","kind":"metric","ledgerSeq":187998,"ledgerLines":187998,"beatSeq":null,"tx":null,"price":null}
-{"at":"2026-10-24T16:42:10.498Z","kind":"playbook","tool":"ledger_stats"}
-{"at":"2026-10-24T16:42:11.684Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=187998 seqFirst=1 seqLast=187998"}
+{"at":"2026-10-24T15:54:08.820Z","kind":"metric","ledgerSeq":2079,"ledgerLines":169358,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T15:54:08.898Z","kind":"playbook","tool":"verify_chain"}
+{"at":"2026-10-24T15:54:13.127Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/verify_chain.py /home/z/aud"}
+{"at":"2026-10-24T16:11:38.065Z","kind":"metric","ledgerSeq":22578,"ledgerLines":22578,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T16:11:38.319Z","kind":"playbook","tool":"verify_chain"}
+{"at":"2026-10-24T16:11:40.963Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: verify_chain","result":"ok=True checked=22666 anchors=[]"}
+{"at":"2026-10-24T16:25:11.838Z","kind":"metric","ledgerSeq":34010,"ledgerLines":34010,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T16:25:11.875Z","kind":"playbook","tool":"ledger_stats"}
+{"at":"2026-10-24T16:25:12.025Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: ledger_stats","result":"ok=True checked=34019 seqFirst=1 seqLast=34019"}
+{"at":"2026-10-24T16:27:12.798Z","kind":"metric","ledgerSeq":35238,"ledgerLines":35238,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T16:27:12.870Z","kind":"playbook","tool":"price_report"}
+{"at":"2026-10-24T16:27:12.892Z","kind":"act","ok":true,"what":"tool-run: פלייבוק-ריבוני: price_report","result":"ok=True seq=35043 price=1.684269 fees=0.585791 treasuryUsds=60210.556556"}
+{"at":"2026-10-24T16:42:16.915Z","kind":"metric","ledgerSeq":null,"ledgerLines":43041,"beatSeq":null,"tx":null,"price":null}
+{"at":"2026-10-24T16:42:41.919Z","kind":"playbook","tool":"tools_selftest"}
+{"at":"2026-10-24T16:42:44.434Z","kind":"act","ok":false,"what":"tool-run: פלייבוק-ריבוני: tools_selftest","result":"הרצת-הכלי-נכשלה: Command failed: /home/z/.venv/bin/python3 /home/z/audit/fleet-economy/bootstrap/sovereign-vm/tools_selftest.py"}
