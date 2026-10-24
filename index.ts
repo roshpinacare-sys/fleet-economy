@@ -48,7 +48,16 @@ function acquireWriterLock(): boolean {
         const l = JSON.parse(fs.readFileSync(WRITER_LOCK, "utf8"));
         if (l?.pid && Number.isFinite(l.pid) && l.pid !== process.pid && pidAlive(l.pid) && Date.now() - (l.at ?? 0) < 24 * 3600_000) return false; // כותב-חי-וטרי — מפנים-בשקט
         try { fs.renameSync(WRITER_LOCK, path.join(STATE_DIR, "quarantine", `${new Date().toISOString().replace(/[:.]/g, "-")}·stale-writer-lock.json`)); } catch {}
-      } catch { /* מנעול-פגום — השתלטות-כנה */ }
+      } catch {
+        /* מנעול-פגום — השתלטות-כנה: מסלול-ההסגר חייב לרוץ גם כאן.
+         * מחלקת-הפגם (נמדדה-חיה 2026-10-24 16:41Z): ENOSPC קטל כתיבת-מנעול
+         * באמצע → קובץ-0-בתים → JSON.parse זורק → ההסגר מעולם לא רץ →
+         * ה-wx נכשל על-הקובץ-הקיים → "writer-lock-held" לנצח (לופ-קריסה
+         * start#1200+ עד-שהסוכן הסגיר-את-המנעול-הריק ידנית).
+         * התיקון: פגום = מסלול-הסגר — rename כמו-מנעול-ישן, ואז wx מצליח. */
+        try { fs.mkdirSync(path.join(STATE_DIR, "quarantine"), { recursive: true }); } catch {}
+        try { fs.renameSync(WRITER_LOCK, path.join(STATE_DIR, "quarantine", `${new Date().toISOString().replace(/[:.]/g, "-")}·corrupt-writer-lock.json`)); } catch {}
+      }
     }
     fs.writeFileSync(WRITER_LOCK, JSON.stringify({ pid: process.pid, at: Date.now(), port: PORT }) + "\n", { flag: "wx" });
     return true;
