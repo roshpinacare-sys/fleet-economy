@@ -2,16 +2,16 @@
   "schema": "sovereign-builder-state/v1",
   "createdAt": "2026-10-24T15:54:08.587Z",
   "backlog": [],
-  "growthLogCount": 4,
-  "acts": 1,
-  "metrics": 2,
+  "growthLogCount": 7,
+  "acts": 2,
+  "metrics": 3,
   "brainCalls": 0,
   "brainOffers": 0,
   "seals": 1,
-  "sealFailures": 0,
+  "sealFailures": 1,
   "capabilities": [],
   "lastKind": "tool-run",
-  "lastAt": "2026-10-24T16:11:40.963Z",
+  "lastAt": "2026-10-24T16:25:12.025Z",
   "lastVerdict": "פעימה-הושלמה",
   "toolStats": {
     "verify_chain": {
@@ -21,6 +21,14 @@
       "lastOkAt": "2026-10-24T16:11:40.962Z",
       "lastResult": "ok=True checked=22666 anchors=[]",
       "lastAt": "2026-10-24T16:11:40.962Z"
+    },
+    "ledger_stats": {
+      "runs": 1,
+      "ok": 1,
+      "fail": 0,
+      "lastOkAt": "2026-10-24T16:25:12.024Z",
+      "lastResult": "ok=True checked=34019 seqFirst=1 seqLast=34019",
+      "lastAt": "2026-10-24T16:25:12.024Z"
     }
   }
 }
