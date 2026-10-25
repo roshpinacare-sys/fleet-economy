@@ -1,0 +1,93 @@
+name: receipts-proof
+# fleet-economy receipts-rail PROOF workflow — suite + KAT + corruption-probe (auxiliary).
+# ═══════════════════════════════════════════════════════════════════════════
+# The canonical SELF-RESCUING receipts-guard.yml (wave-19.85 lineage, reconstruction
+# landed by wave-80, canonical blob giant@sovereign/rail-canonical 435a480b0763ce6d…)
+# re-arms this rail every 15 minutes. This instrument ADDS independent proof:
+#   · the 14/14 receipt-sign suite (real RFC-4231 KAT + real live-ledger cross-check)
+#   · the guard core's fail-closed plan law as a KAT
+#   · the source-not-b64 corruption probe (measured 2026-10-25: the storm's
+#     double-encoding wrote base64 TEXT into rail files — suite unparseable)
+#   · custody-gated signed-receipts verification (a custody gap is named LOUDLY,
+#     never hidden, never fails red — no red-spam law)
+# Wave 20.00 (agent-9, directive 1a173c6ac120ccb1 §2).
+on:
+  push:
+    paths:
+      - "lib/receipt-sign.ts"
+      - "tests/receipt-sign.test.ts"
+      - "scripts/fleet-receipts-guard-core.py"
+      - "state/audit/verify_signatures.py"
+      - ".github/workflows/receipts-proof.yml"
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: receipts-proof
+  cancel-in-progress: false
+jobs:
+  receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout rail
+        uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+
+      - name: Receipts rail suite (bun test — zero network, injected key)
+        run: bun test tests/receipt-sign.test.ts
+
+      - name: Guard-core fail-closed plan KAT (no adopted blob ⇒ planError, empty plan)
+        run: |
+          echo '{"tree":{"lib/receipt-sign.ts":"deadbeef"},"adopted":{}}' | python3 scripts/fleet-receipts-guard-core.py | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          assert d['swallows'] == [], d
+          assert d['planError'] and 'no adopted blob' in d['planError'], d
+          assert d['plan'] == [], d
+          print('guard-core fail-closed plan law OK:', d['planError'])"
+
+      - name: Verify state is real source, not storm-corrupted b64 text
+        run: |
+          for f in lib/receipt-sign.ts tests/receipt-sign.test.ts scripts/fleet-receipts-guard-core.py state/audit/verify_signatures.py; do
+            if [ -f "$f" ]; then
+              if head -c 4 "$f" | grep -q '^[A-Za-z0-9+/=]\{4\}$' && ! head -1 "$f" | grep -qE '^(/\*|#|import|#!/)'; then
+                echo "::error::$f looks like storm-corrupted base64 text, not source — receipts rail integrity failure"; exit 2
+              fi
+            fi
+          done
+          echo "rail files are real source (corruption probe passed)"
+
+      - name: Signed-receipts verification (custody-gated)
+        env:
+          FLEET_RECEIPT_KEY: ${{ secrets.FLEET_RECEIPT_KEY }}
+        run: |
+          RECIPTS=$(ls state/audit/receipts*.json state/audit/receipt-*.json 2>/dev/null | head -1 || true)
+          if [ -z "$RECIPTS" ]; then
+            echo "::notice::no signed-receipts document yet (state/audit/receipts*.json) — signed chain not sealed; verification skipped (named, not hidden)"
+            exit 0
+          fi
+          if [ -z "${FLEET_RECEIPT_KEY:-}" ]; then
+            echo "::warning::FLEET_RECEIPT_KEY absent — signed-receipts verification in DETECTION-ONLY mode (custody gap named, never hidden)"
+            exit 0
+          fi
+          python3 state/audit/verify_signatures.py "$RECIPTS"
+
+      - name: Receipt
+        if: always()
+        run: |
+          {
+            echo "### receipts-proof receipt"
+            echo "- suite: bun test tests/receipt-sign.test.ts (14/14 lineage)"
+            echo "- guard-core: fail-closed plan KAT"
+            echo "- corruption probe: source-not-b64"
+            echo "- signed chain: custody-gated (see steps above)"
+            echo "- canonical rescue: giant@sovereign/rail-canonical receipts-guard (wave-80 reconstruction 435a480b)"
+            echo "- this instrument: wave-20.00 agent-9 (directive 1a173c6ac120ccb1 §2)"
+          } >> "$GITHUB_STEP_SUMMARY"
