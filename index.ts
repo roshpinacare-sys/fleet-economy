@@ -27,6 +27,7 @@ import path from "path";
 // גל-87 · מיגרציית-יתרות: כל-היתרות (balances) והבריכה (pool) חיים-כ-BigInt µ¢
 // בזיכרון; הסידור (פנקס + snapshot) נשאר מספרי-6-ספרות זהה-בייטים — רצף-hash נשמר.
 import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, wagePaceCapMu, type Mu } from "./lib/mu";
+import { adoptCanonicalPaths, FLEET_RAIL_ADOPT_TARGETS } from "./rail-adopt"; // גל-82ג · אימוץ-קנוני-מאומת-של-פס-הקבלות (trace 1a178c614313ad05)
 /* גל-115 · G36 · מושל-המדיניות-הריבוני: המנוע-עצמו-המחוקק — מדידה→החלטה→חוק-בספר→בדיקת-תוצאה */
 import { CONSTITUTION, governorDecide, governorOutcome, emptyCooldowns, closureOf, closureDecompose, sustainablePaceOf, type GovPolicy, type GovCooldowns, type GovMeasure, type GovLever } from "./lib/governor"; // גל-116·G37: +שווי-המשקל-המבני
 
@@ -1583,7 +1584,7 @@ async function unionSync(dir: string, remote: string): Promise<{ ok: boolean; ho
   const uc = await git(dir, ["commit", "-q", "-m", `vault-sync [auto-economy]: union-resolved ${ur.resolved} files — איחוד-ללא-מחיקות`]);
   return { ok: uc.ok || uc.out.includes("nothing to commit"), how: "union", note: `resolved=${ur.resolved}` };
 }
-async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opts?: { strategyOurs?: boolean; excludePaths?: string[]; gc?: boolean; trueMerge?: boolean }): Promise<boolean> {
+async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opts?: { strategyOurs?: boolean; excludePaths?: string[]; gc?: boolean; trueMerge?: boolean; adoptPaths?: readonly string[] }): Promise<boolean> {
   // גל-83 · תיקון-תפר-מיזוג: הפרמטר afterPull נמחק-מהחתימה-במיזוג-אך-הקריאה-ב-sealMyProject
   // המשיכה-להעביר-אותו + הגוף-התייחס-אליו → ReferenceError שהרג-את-כל-סבב-האטימה
   // (ובכך-ביטל-בשקט-את-משמורת-המדינה: freeze+custody-restore — שורש-קריעות-הספר-החוזרות).
@@ -1616,6 +1617,13 @@ async function sealRepo(dir: string, afterPull?: () => void | Promise<void>, opt
     // דחף-במקומה-מצב-ישן-וקידם-את-הענן — מקור-תפרי-הספר-ההיסטוריים.
     // גל-98 · רפואת-remote-עצמית: אם-המכונה-עלתה-בלי-רימוטים — מבטיחים-אחד-לפני-כל-סוופ.
     const remote = await ensureSealRemote(dir);
+    // גל-82ג · אימוץ-קנוני-לפני-מיזוג: נתיבי-פס-הקבלות נאספים-מ-FETCH_HEAD (הקאנון-בענן)
+    // לפני-ענף-הספר (merge -s ours שמקדם-עץ-מיושן) — העץ-החי אף-פעם לא מפרסם-פס-מיושן.
+    // נמדד-חי (2026-10-26): lib/receipt-sign.ts חזר-להיות base64-טקסט בענן (81910e2)
+    // אחרי-עוד-2-רילנדים-אמת — המקור-הוא-העץ-המקומי-של-האוטם, לא הענן.
+    if (opts?.adoptPaths?.length) {
+      try { await adoptCanonicalPaths(dir, remote, opts.adoptPaths, sealLog); } catch (e) { sealLog({ repo: name, action: "adopt-error", error: String(e).slice(0, 160) }); }
+    }
     // גל-57 · חוק-הכספת-המוחלט: המנוע לעולם לא ממזג/מאחד/מקדים-FF את עץ-החיים-של-עצמו.
     // נמדד-חי (05:34:55 + 05:56:55): הענן-מתפצל-כל-רגע → merge-סכסוך-על-הספר →
     // unionResolveConflicts כותב-את-הקובץ-ב-while-flush → שורה-קרועה → /verify-הבא →
@@ -1770,6 +1778,7 @@ async function sealAll(): Promise<void> {
     try { await sealMyProject({ excludePaths: dbExclude, gc: true }); sealed++; } catch (e) { sealLog({ repo: "my-project", action: "custody-seal-fail", error: String(e).slice(0, 160) }); }
     for (const dir of rest) {
       if (dir === "/home/z/work/fleet-economy") { if (await sealRepo(dir, undefined, { gc: true, trueMerge: true })) sealed++; }
+      else if (dir === "/home/z/audit/fleet-economy") { if (await sealRepo(dir, undefined, { gc: true, trueMerge: true, adoptPaths: FLEET_RAIL_ADOPT_TARGETS })) sealed++; } // גל-82ג · הבית-החי-של-הספר: אימוץ-קנוני-מאומת-לפני-כל-אטימה
       else { if (await sealRepo(dir)) sealed++; }
     }
     sealing = false; // הפשרה — הכלכלה-חוזרת-לנשום
