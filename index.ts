@@ -29,9 +29,11 @@ import path from "path";
 import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, wagePaceCapMu, type Mu } from "./lib/mu";
 /* גל-115 · G36 · מושל-המדיניות-הריבוני: המנוע-עצמו-המחוקק — מדידה→החלטה→חוק-בספר→בדיקת-תוצאה */
 import { CONSTITUTION, governorDecide, governorOutcome, emptyCooldowns, closureOf, closureDecompose, sustainablePaceOf, type GovPolicy, type GovCooldowns, type GovMeasure, type GovLever } from "./lib/governor"; // גל-116·G37: +שווי-המשקל-המבני
+import { loadAnchorBaseline, anchorVerdict, type AnchorBaseline } from "./lib/anchor-baseline"; // G76-d: בסיס-עוגנים-פר-דור-ספר (רישום-מתועד — לא קבוע-דור-ישן)
 
 const PORT = 3016;
 const STATE_DIR = path.join(import.meta.dir, "state");
+const ANCHOR_REG: AnchorBaseline = loadAnchorBaseline(STATE_DIR); // G76-d: בסיס-העוגנים-של-הספר-החי (0 תפרים = ספר-רציף · 7-ההיסטורי שייך-לדור-הקודם — רשום-להוכחה)
 /* גל-57 · מנעול-כותב-יחיד-בעלייה (שורש-הסחרור, נמדד-חי 2026-10-22): למנוע-מציתים-מרובים
  * (economy-node-host · instrumentation · resurrect-fleet) — מנוע-שני שנכשל-ב-bind עדיין
  * הספיק למוטט-דיסק ב-boot (chain-reconcile/tail-replay) בטרם-ה-port → קרעים בשורה-0.
@@ -1184,7 +1186,7 @@ function quarantineState(reason: string) {
  * (כמו-שגיט סומך על קומיטים); עוגנים-עוקבים (שבר-אמת שאינו מתגבש) = ok:false.
  * אפס-שכתוב-היסטוריה: השורות נשארות בדיוק כפי שנכתבו. /verify חושף anchors —
  * צמיחה-מעבר ל-3 = אזעקה. המקור-לתפרים נחסם בכותב-יחיד (economy-beat + heartbeat). */
-function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; anchors?: { seq: number; line: number }[] } {
+function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; anchors?: { seq: number; line: number }[]; headHash?: string } {
   let prev = "GENESIS"; let checked = 0; let prevWasAnchor = false; let lastSeq = 0;
   const anchors: { seq: number; line: number }[] = [];
   const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
@@ -1212,7 +1214,7 @@ function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; ancho
   // Z2-15 · זנב-בלתי-מעוגן: הספר-נגמר-על-עוגן בלי-יורש-שמוכיח-עיגון-מחדש → שבר-אמת fail-closed
   // (קריסה-בין-flush-לסנאפשוט = בדיוק-מה-replayTailFromSnapshot נבנה-לטפל-בו)
   if (prevWasAnchor && anchors.length > 0) return { ok: false, checked, brokenAt: anchors[anchors.length - 1].seq, anchors };
-  return { ok: true, checked, anchors };
+  return { ok: true, checked, anchors, headHash: prev }; // G76-d: +עוגן-ראש-השרשרת (ה-h-החתום-האחרון) לקבלת-עיגון-קריאה
 }
 
 /* גל-109 · בליעת-זרימות-החוץ (G27): קריאה-ב-boot-בלבד (אחרי-shחזור-seenRefs →
@@ -1361,7 +1363,9 @@ const server = Bun.serve({
         }
         lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked, anchors: r.anchors?.length ?? 0 };
         const rp = ensureParityOrHeal(replayParityLive(), r.ok); // גל-66: פערי-parity-חיים מתרפאים-בזמן-ריצה
-        return Response.json({ ...r, anchorsCount: r.anchors?.length ?? 0, replayParity, replayLive: rp });
+        /* G76-d · קנה-המידה-הכנה-פר-דור-ספר: הרישום קובע את הבסיס (0 תפרים = ספר-רציף);
+         * שדות-additive-בלבד — צרכנים-ישנים (anchorsCount) לא-נפגעים. */
+        return Response.json({ ...r, anchorsCount: r.anchors?.length ?? 0, anchorBaseline: ANCHOR_REG.baseline, anchorSource: ANCHOR_REG.source, anchorVerdict: anchorVerdict(r.anchors?.length ?? 0, ANCHOR_REG), anchorInherited: ANCHOR_REG.inherited, replayParity, replayLive: rp });
       }
       /* ── גל-116 · G37 · GET /claims — פנקס-הטענות-החי-של-הכלכלה ──
        * כל-טענה = מבחן-פלסיבילי-מכונה עם מדידה-טרייה (S-grade-מוכן לפדרציה ולעמיתים —
@@ -1394,7 +1398,7 @@ const server = Bun.serve({
         const treasUsds = toF(bal("treasury").usds);
         const runwayHours = burn2 > 0 ? treasUsds / burn2 : Infinity;
         const claims = [
-          { id: "chain-integrity", claim: "השרשרת-מאומתת-מקצה-לקצה (כל-תפר-מגובה-רציפות-מוכחת · עד-5-עוגנים-תעודה, מעל-זה-אזעקה) והשחזור-הפריטי-חי (replayParity)", pass: vOk === true && (vAnchors ?? 0) <= 5 && rp.parity === true, measured: { verifyOk: vOk, checked: vChecked, anchors: vAnchors, replayParity: rp.parity, replayDeltas: rp.deltas, replayDetail: (rp as any).detail ?? [], replaySource: rp.source, verifyAgeSec: vAgeSec, bookGen, parityHealed: (rp as any).healed ?? false } }, // גל-57: עוגן-מגובה (verifyChain-ok-כבר-fail-closed-על-עוגן-לא-מוכח) = תעודת-המשכיות לפי-דוקטרינת-גל-85 — לא-שבר; הקיפול-חי-כולל-את-ה-buffer (דיסק+buffer == זיכרון)
+          { id: "chain-integrity", claim: `השרשרת-מאומתת-מקצה-לקצה (כל-תפר-מגובה-רציפות-מוכחת · עד-${ANCHOR_REG.baseline}-עוגנים-מתועדים-לספר-החי [${ANCHOR_REG.source}], מעל-זה-אזעקה) והשחזור-הפריטי-חי (replayParity)`, pass: vOk === true && (vAnchors ?? 0) <= ANCHOR_REG.baseline && rp.parity === true, measured: { verifyOk: vOk, checked: vChecked, anchors: vAnchors, anchorBaseline: ANCHOR_REG.baseline, anchorSource: ANCHOR_REG.source, anchorInherited: ANCHOR_REG.inherited?.baseline ?? null, replayParity: rp.parity, replayDeltas: rp.deltas, replayDetail: (rp as any).detail ?? [], replaySource: rp.source, verifyAgeSec: vAgeSec, bookGen, parityHealed: (rp as any).healed ?? false } }, // G76-d: הבסיס-פר-דור-ספר-מהרישום (היה-5-קבוע — שייך-לדור-ישן); עוגן-מגובה (verifyChain-ok-כבר-fail-closed-על-עוגן-לא-מוכח) = תעודת-המשכיות לפי-דוקטרינת-גל-85 — לא-שבר; הקיפול-חי-כולל-את-ה-buffer (דיסק+buffer == זיכרון)
           { id: "law-is-book", claim: "החוק-החי-שווה-לשורת-החוק-החתומה-בספר (אפס-חוק-מפלג)", pass: govLawFromBook ? JSON.stringify(govLawFromBook.law) === JSON.stringify(lawNow) : null, measured: { fromBook: govLawFromBook?.law ?? null, live: lawNow, bookAt: govLawFromBook?.at ?? null, src: govLawFromBook?.src ?? null } },
           { id: "no-negative-balances", claim: "אף-חשבון-אינו-שלילי (USDS·SAOS — חשבונאות-כפולה-שלמה)", pass: minUsds >= 0 && minSaos >= 0, measured: { minUsds, minSaos, accounts: balances.size } },
           { id: "windows-alive", claim: "חלונות-המדידה-חיים (שכר ושירותים בשעה האחרונה)", pass: m2.wageRows1h > 0 && svc > 0, measured: { wageRows1h: m2.wageRows1h, wageUsds1h: +m2.wageUsds1h.toFixed(2), serviceUsds1h: +svc.toFixed(2) } },
