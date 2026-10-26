@@ -16,6 +16,11 @@ name: rail-restorer
 on:
   push:
     branches: [main]
+  schedule:
+    # גל-82ג · טריגר-push לא-נורה על-דחיפות-GITHUB_TOKEN של-הסערה (חוק-מניעת-לולאה
+    # של-גיטהאב — נמדד: 8+ דחיפות-אטימה 16:05-16:38Z, אפס-הצתות) → קאדנס-גיבוי.
+    # הנשכבת: cron זה + dispatch-שרשרת מ-receipts-guard + guardian */10 ב-giant.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:

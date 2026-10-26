@@ -105,3 +105,17 @@ jobs:
             git rebase --abort 2>/dev/null || true
             echo "rebase conflict — honest skip, next cycle re-measures (no force ever)"
           fi
+      - name: dispatch rail-restorer (sha-verified heal, loop-safe)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # גל-82ג (trace 1a178c614313ad05): דחיפות-האטימה הן-GITHUB_TOKEN → חוק-מניעת-
+          # הלולאה של-גיטהאב לא מצית-push-triggers מהן (נמדד: אפס-הצתות על 8+ דחיפות).
+          # workflow_dispatch דרך-API פטור-מהחוק → שרשרת-הצתה חוקית: guard */15 → restorer.
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/rail-restorer.yml/dispatches" \
+            -d '{"ref":"main"}')
+          echo "rail-restorer dispatch http=${code} (204=queued; anything else honest-log, next cycle retries)"
+          [ "$code" = "204" ] || exit 0
