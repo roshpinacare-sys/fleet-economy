@@ -5,12 +5,15 @@
  *     שני-כותבים על ספר-אחד. מעכשיו: כותב-אחד. דילוג-כנה אם-כותב-אחר-חי (< 30 דק').
  *  2. boot על-הספר-הקנוני מהגיט (restored=true אחרת-כישלון).
  *  3. הכלכלה נושמת BEAT_SECONDS (טיקים, שכר, שירותים, AMM, מס — אפס-הדמיות).
- *  4. שער-אמת: /verify חייב ok:true + עוגני-תפר = 0 מול בסיס ANCHOR_BASELINE (תפר-חדש = ספר-קרוע = כישלון-ריצה; תיקון-תיעוד-גל-97 — היה-כתוב "3 בדיוק" מהעידן-הישן).
+ *  4. שער-אמת: /verify חייב ok:true + תפרי-עוגן עד-בסיס-המתועד-לספר-החי (G76-d: רישום
+ *     state/audit/anchor-baseline.json — הספר-החי: 0 תפרים = ספר-רציף; תפר-חדש = ספר-קרוע = כישלון-ריצה;
+ *     בסיס-7-ההיסטורי שייך-לדור-הקודם — רשום-להוכחה בלבד).
  *  5. איטום-המצב-חזרה-לגיט (commit+push; מירוץ → RACE-LOST fail-closed — איסור-מוחלט על pull --rebase -X ours, גל-94).
  */
 import { spawn, execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { loadAnchorBaseline, anchorReceiptLine } from "./lib/anchor-baseline"; // G76-d: בסיס-עוגנים-פר-דור-ספר
 
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
 const STATE = path.join(ROOT, "state");
@@ -18,7 +21,11 @@ const HB = path.join(STATE, "writer-heartbeat.json");
 const WRITER = process.env.ECONOMY_WRITER ?? "github-economy-beat";
 const BEAT_SECONDS = Number(process.env.BEAT_SECONDS ?? 180);
 const PORT = 3016;
-const ANCHOR_BASELINE = 7; // פורנזיה 2026-10-18T04Z (agent-2, גל-93): בסיס-3 ההיסטורי (46335/55120/68276) + 4 תפרי-צומת מתועדים [290040, 294919, 299807, 299847] — משמורת-חירום gal-18 (777941b: ספר-חי 284K+ שניצל אחרי 150,120 אירועים לא-אטומים · 81971ff: היסטוריית-הענן מקושרת כהורה) + מיזוג-שלום-הבנאים ae96189. אומת-בלתי-תלוי (מאמת-פייתון גל-91): ok=true · checked=316,844 · רציפות-מוכחת-על-כל-התפרים. כל-תפר-מעבר ל-7 = אזעקה fail-closed.
+/* G76-d · פורנזיה: ה-7 ההיסטורי (46335/55120/68276 + צמתים 290040/294919/299807/299847) הוא
+ * בסיס-דור-הספר-הקודם — הספר-החי (regenesis2 · פתיחה seq=1 · כותב-יחיד) רציף-לחלוטין.
+ * הבסיס-החי-נקרא-מהרישום (state/audit/anchor-baseline.json · כרגע 0), עם-עדיפות-לדיווח-החי
+ * מהמנוע (/verify anchorBaseline). כל-תפר-מעבר-לבסיס = אזעקה fail-closed. */
+const ANCHOR_REG = loadAnchorBaseline(path.join(ROOT, "state"));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -105,6 +112,19 @@ console.log(`[economy-beat] UP · seq=${seqStart} · הכלכלה נושמת ${B
 /* 3) זרימה */
 await sleep(BEAT_SECONDS * 1000);
 
+/* 3½) G77-b · מפעל-התדלוק: מחזור-טפטוף-מיידי + סנאפשוט-מחזור-הספר (חוב-החידוש
+ * cycle-32+ — מקור-ציטוט מכונה ל-G77-c). אידמפוטנטי: ריצה-חוזרת-באותו-מחזור
+ * נדחסת-ל-dedup לפי-planId · fail-honest: חסימה-כנה היא-תשובה-תקפה. */
+try {
+  const fuelOnce = await fetch(`http://127.0.0.1:${PORT}/fuel/once`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
+  const f = await fuelOnce.json();
+  if (f?.ok) {
+    console.log(`[economy-beat] G77-b fuel/once · planId=${f?.plan?.planId ?? "?"} · reason=${f?.plan?.reason ?? "?"} · applied=${f?.applied ?? 0} · deduped=${f?.deduped ?? 0} · snapshot=${(f?.snapshot?.paths ?? []).join("+") || "none"}`);
+  } else {
+    console.log(`[economy-beat] G77-b fuel/once · כנה-חסום: ${JSON.stringify(f?.plan?.blocked ?? f).slice(0, 200)}`);
+  }
+} catch (e) { console.log(`[economy-beat] G77-b fuel/once נכשל-כנה: ${String(e?.message ?? e).slice(0, 120)}`); }
+
 /* 4) שער-אמת */
 const v = await getJson("/verify");
 const m = await getJson("/metrics");
@@ -135,29 +155,46 @@ if (!v?.ok) {
   console.error(`[economy-beat] FAIL — אימות-שרשרת: ${JSON.stringify(v)}`); process.exit(1);
 }
 const anchors = v.anchors?.length ?? 0;
-console.log(`[economy-beat] VERIFY ok · checked=${v.checked} · anchors=${anchors} (בסיס ${ANCHOR_BASELINE})`);
-if (anchors > ANCHOR_BASELINE) { console.error("[economy-beat] FAIL — נוצרו תפרי-עוגן חדשים — הספר נקרע"); process.exit(1); }
+const anchorBaseline = typeof v.anchorBaseline === "number" ? v.anchorBaseline : ANCHOR_REG.baseline; // החי-מדווח → אחרת-הרישום
+const anchorLine = anchorReceiptLine(anchors, { ...ANCHOR_REG, baseline: anchorBaseline });
+console.log(`[economy-beat] VERIFY ok · checked=${v.checked} · ${anchorLine} (בסיס-פר-דור-ספר${v.anchorSource ? " · " + v.anchorSource : ""})`);
+if (anchors > anchorBaseline) { console.error("[economy-beat] FAIL — תפר-עוגן-חדש-שאינו-מתועד — הספר נקרע"); process.exit(1); }
 
 /* 5) סיכום-כן */
 const summary = process.env.GITHUB_STEP_SUMMARY;
 const line = (s) => { if (summary) try { fs.appendFileSync(summary, s + "\n"); } catch {} console.log(s); };
 const delta = (m?.seq ?? 0) - seqStart;
 line(`## economy-beat ✅`);
-line(`- seq: ${seqStart} → ${m?.seq ?? "?"} (**+${delta} עסקאות אמת ב-beat זה**)`);
-line(`- שרשרת: checked=${v.checked} · עוגני-תפר=${anchors}/${ANCHOR_BASELINE} (יציב)`);
+line(`- seq: ${seqStart} → ${m?.seq ?? "?"} (**+${delta} עסקאות אמת ב-beat זה** · ראש-השרשרת: ${v.headHash ?? "?"})`);
+line(`- שרשרת: checked=${v.checked} · ${anchorLine} · בסיס-פר-דור-ספר (היסטורי-7 מתועד-ברישום: state/audit/anchor-baseline.json)`);
 line(`- בריכה: מחיר=${m?.pool?.priceUsdsPerSaos} USDS/SAOS · עמלות=${m?.pool?.feesUsds} USDS`);
+line(`- G77-b דלק-גריד: חיילים=${(m?.fuel?.roster ?? []).length} · saos-0004=${m?.fuel?.saos0004Registered ? "רשום" : "לא-רשום"} · מחזורים=${m?.fuel?.cycles} · שולם=${m?.fuel?.paidUsds} USDS · planId=${m?.fuel?.lastPlanId ?? "-"}`);
 line(`- מווסת: nBase=${m?.throughput?.governor?.nBase} · קבלת-חלון=${m?.throughput?.governor?.windowAcceptance}`);
 line(`- כותב-יחיד: ${WRITER} · ${new Date().toISOString()}`);
 fs.writeFileSync(HB, JSON.stringify({ writer: WRITER, at: Date.now(), endedAt: Date.now(), seq: m?.seq }) + "\n");
 
+/* 5½) עוגן-מצב-אמת (G76-d · owner §7 receipts): ראש-השרשרת נרשם-כקובץ-קבלה-ונאטם-לגיט
+ * בכל-פעימה — עיגון-קריאה-של-ראש-ה-hash-chain בעץ-המצב, מקור-אמת-אחד עם /verify. */
+const headReceipt = {
+  at: new Date().toISOString(),
+  writer: WRITER,
+  seq: m?.seq ?? null,
+  headHash: v.headHash ?? null,
+  verify: { ok: v.ok, checked: v.checked, anchors, baseline: anchorBaseline },
+  inheritedBaseline: ANCHOR_REG.inherited?.baseline ?? null,
+};
+fs.mkdirSync(path.join(STATE, "audit"), { recursive: true });
+fs.writeFileSync(path.join(STATE, "audit", "chain-head.json"), JSON.stringify(headReceipt, null, 2) + "\n");
+
 /* 6) איטום-לגיט */
+const cycleSnaps = (() => { try { return fs.readdirSync(path.join(STATE, "audit")).filter((n) => n === "ledger-cycle.json" || /^ledger-cycle-\d+\.json$/.test(n)).map((n) => `state/audit/${n}`); } catch { return []; } })(); // G77-b: קבלות-מחזור-הספר נאטמות-לגיט
 const run = (cmd, args) => new Promise((res) => {
   const c = spawn(cmd, args, { cwd: ROOT });
   let o = ""; c.stdout.on("data", (d) => (o += d)); c.stderr.on("data", (d) => (o += d));
   c.on("close", (code) => res({ code: code ?? 1, o }));
 });
-await run("git", ["add", "state/ledger.jsonl", "state/snapshot.json", "state/seal-log.jsonl", "state/writer-heartbeat.json", "state/ext-flows.jsonl"]); // גל-109 · ext-flows.jsonl נאטם (כותב-יחיד: console-API · הפעימה מאטימה בלבד)
-await run("git", ["commit", "-q", "-m", `[economy-beat] seq=${m?.seq ?? "?"} (+${delta}) · עוגנים=${anchors}/${ANCHOR_BASELINE} · מאומת-מול-הספר`]);
+await run("git", ["add", "state/ledger.jsonl", "state/snapshot.json", "state/seal-log.jsonl", "state/writer-heartbeat.json", "state/ext-flows.jsonl", "state/audit/chain-head.json", "state/audit/anchor-baseline.json", "state/grid-roster.json", ...cycleSnaps]); // גל-109 · ext-flows.jsonl נאטם · G76-d: +עוגן-ראש-השרשרת ורישום-בסיס-העוגנים · G77-b: +רשום-הגריד וקבלות-מחזור-הספר
+await run("git", ["commit", "-q", "-m", `[economy-beat] seq=${m?.seq ?? "?"} (+${delta}) · ${anchorLine} · מאומת-מול-הספר`]);
 let push = await run("git", ["push", "origin", "HEAD"]);
 if (push.code !== 0) {
   /* גל-94 · חוק-המירוץ: אסור pull --rebase -X ours — ב-rebase ours=origin ולכן העסקאות-שלנו

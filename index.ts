@@ -29,9 +29,19 @@ import path from "path";
 import { fromF, toF, ammOut as muAmmOut, splitFee, splitRouting, wagePaceCapMu, type Mu } from "./lib/mu";
 /* גל-115 · G36 · מושל-המדיניות-הריבוני: המנוע-עצמו-המחוקק — מדידה→החלטה→חוק-בספר→בדיקת-תוצאה */
 import { CONSTITUTION, governorDecide, governorOutcome, emptyCooldowns, closureOf, closureDecompose, sustainablePaceOf, type GovPolicy, type GovCooldowns, type GovMeasure, type GovLever } from "./lib/governor"; // גל-116·G37: +שווי-המשקל-המבני
+import { loadAnchorBaseline, anchorVerdict, type AnchorBaseline } from "./lib/anchor-baseline"; // G76-d: בסיס-עוגנים-פר-דור-ספר (רישום-מתועד — לא קבוע-דור-ישן)
+/* G77-b · מפעל-התדלוק הריבוני: זרימת-דלק אוטומטית לחיילי-הגריד (כולל saos-0004) ·
+ * רשום-גריד נתונית · סנאפשוט-מחזור-הספר (חוב-החידוש cycle-32 — G77-c מצטט). */
+import { planFuelStream, FUEL_POLICY_DEFAULT, FUEL_LAW, type FuelPlan, type FuelPolicy } from "./lib/fuel-stream";
+import { loadGridRoster, type GridRoster } from "./lib/grid-roster";
+import { buildCycleSnapshot, nextCycleNumber, CYCLE_BASELINE } from "./lib/ledger-cycle";
 
-const PORT = 3016;
-const STATE_DIR = path.join(import.meta.dir, "state");
+/* G77-b · שכבות-על-סביבה (additive · ברירת-מחדל = התנהגות-היסטורית-מלאה):
+ * FLEET_STATE_DIR/FLEET_PORT — ההרצה-במגרש-חול (--once CLI · בדיקות) בלי-נגיעה
+ * בספר-החי. בלי-סביבה: הנתיבים-הקנוניים כמו-תמיד. */
+const PORT = Number(process.env.FLEET_PORT ?? 3016);
+const STATE_DIR = process.env.FLEET_STATE_DIR ? path.resolve(process.env.FLEET_STATE_DIR) : path.join(import.meta.dir, "state");
+const ANCHOR_REG: AnchorBaseline = loadAnchorBaseline(STATE_DIR); // G76-d: בסיס-העוגנים-של-הספר-החי (0 תפרים = ספר-רציף · 7-ההיסטורי שייך-לדור-הקודם — רשום-להוכחה)
 /* גל-57 · מנעול-כותב-יחיד-בעלייה (שורש-הסחרור, נמדד-חי 2026-10-22): למנוע-מציתים-מרובים
  * (economy-node-host · instrumentation · resurrect-fleet) — מנוע-שני שנכשל-ב-bind עדיין
  * הספיק למוטט-דיסק ב-boot (chain-reconcile/tail-replay) בטרם-ה-port → קרעים בשורה-0.
@@ -70,7 +80,7 @@ let taxBps = 250; // גל-112 · G33 · מס-שירותים 2.5% → הכספת 
 const SOV_POLICY = path.join(STATE_DIR, "sov-policy.json"); // גל-111 · G32 · חוק-הון-הריבון (מדיניות-מוצהרת-בקנון · המנוע קורא-ב-boot בלבד)
 
 /* ── משתמשי-הפנים ─────────────────────────────────────────────────────────── */
-type Account = { id: string; kind: "treasury" | "soldier" | "fleet" | "pool"; role: string };
+type Account = { id: string; kind: "treasury" | "soldier" | "fleet" | "pool" | "grid"; role: string };
 const SOLDIERS = [
   { id: "yarden", role: "סוגרת-פינות משולחן ראש-המטה" },
   { id: "tamar", role: "מעדכנת תזרים בecon-book" },
@@ -95,6 +105,18 @@ const ACCOUNTS: Account[] = [
   ...FLEET_NODES.map((n) => ({ id: n.id, kind: "fleet" as const, role: n.role })),
   { id: "boot-verifier", kind: "fleet" as const, role: "מאמת-האתחול :3042 (הוכחת-חיים)" },
 ];
+/* G77-b · רשום-הגריד הנתונית: חיילי-גריד (headcorner · saos-0001..0004 — בכללם
+ * saos-0004 המנדטי) נרשמים-מהקובץ (state/grid-roster.json) — הוספת-חייל = שורת-נתון.
+ * kind "grid": לא-משתתפים-בהגרלות-המשק-האקראיות (אפס-שינוי-התנהגות-בנתיבי-הקיים) —
+ * מסלול-הדלק-שלהם הוא מפעל-הטפטוף הייעודי (runFuelCycle). קריאה-ב-boot בלבד ·
+ * fail-closed: קובץ-פגום ⇒ רשום-ריקה-כנה (המנוע-לא-מת). */
+const GRID_ROSTER: GridRoster = loadGridRoster(STATE_DIR);
+if (GRID_ROSTER.soldiers.length) {
+  ACCOUNTS.push(...GRID_ROSTER.soldiers.map((s) => ({ id: s.id, kind: "grid" as const, role: `חייל-גריד (${s.chain}/${s.rail}) — ${s.role}` })));
+  console.log(`[fleet-economy] grid-roster G77-b: ${GRID_ROSTER.soldiers.length} חיילי-גריד רשומים (${GRID_ROSTER.soldiers.map((s) => s.id).join(", ")}) · ${FUEL_LAW}`);
+} else {
+  console.log(`[fleet-economy] grid-roster G77-b: רשום-ריקה/פגומה — אף-חייל-גריד לא רשום (fail-closed כנה)`);
+}
 // גל-114·G35 (agent-2): מאמת-האתחול אינו-שחקן-כלכלי — ההון-שלו-ערבות-הוכחת-חיים, לא-מחזור.
 // נמדד: הוא-היה-המשלם-היחיד-הגדול (חצי-מהזרימה) — כשהפעימה-נעצרת, המשק-מתשטח.
 const PAY_NODES = FLEET_NODES.filter((n) => n.id !== "boot-verifier");
@@ -167,6 +189,12 @@ let wageBlocked = 0;
 let dividendPaidMu = 0n, dividendRounds = 0;
 let bondIssuedMu = 0n, bondRepaidMu = 0n, bondInterestMu = 0n;
 let bondLastTs = 0;
+/* G77-b · מדינת-מפעל-הדלק — מונים-כנים-ששורדים-סנאפשוט-וסימטריים-ב-replay */
+const FUEL_POLICY: FuelPolicy = FUEL_POLICY_DEFAULT;
+const FUEL_TICK_EVERY = 150; // מחזור-טפטוף 120ש' ≈ 150-טיקים (טיק=800מ"ש) — dedup-לפי-planId הופך-ריצות-חוזרות-באותו-מחזור לאידמפוטנטיות
+let fuelPaidMu = 0n, fuelBlocked = 0, fuelCycles = 0;
+let fuelLastPlanId: string | null = null, fuelLastPlan: FuelPlan | null = null;
+let fuelLastApplied = 0, fuelLastDeduped = 0; // G77-b: הוכחת-האידמפוטנטיות-החיה (מוצהרת ב-/fuel/once)
 /* גל-109·G28 · מדיניות-ניתוב: קריאה-ב-boot בלבד · fail-closed: קובץ-פגום/חסר = poolPct 0 (הכל-לכספת — התנהגות-G27) */
 let extPolicy = { poolPct: 0, maxFlowUsds: 25_000, dailyCapUsds: 50_000 };
 try {
@@ -484,6 +512,8 @@ function apply(t: Omit<Tx, "h">, refH?: string): Tx | null {
   else if (t.kind === "bond-repay") bondRepaidMu += amtMu;
   else if (t.kind === "bond-interest") bondInterestMu += amtMu;
   else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: חלון-הקצב-ניזון-מהספר-עצמו
+  else if (t.kind === "fuel") { fuelPaidMu += amtMu; } // G77-b: מסלול-הדלק-נפרד-מהשכר (רצפה/תקרה/רזרבה משלו · lib/fuel-stream)
+  else if (t.kind === "fuel-blocked") { fuelBlocked++; } // G77-b: קבלת-חסימה כנה (amount 0 · אפס-יתרות-מפוברקות)
   else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") incomeAccruedMu += amtMu; else incomeSaosMu += amtMu; } // איסוף-עמלות-בריכה
   // גל-116·G37: חלון-המהירות — מחזור-השירותים (apply-וגם-replay — חוק-הסימטריה)
   if (t.kind === "service" && t.asset === "USDS") winFeed(serviceWin, t.ts, amtMu);
@@ -547,7 +577,7 @@ function spawnTx(): Tx | null {
   }
   if (r < 0.50) { // תשלום-שירות הדדי — עיקר-הזרימה (משתמשי-פנים משלמים זה לזה)
     // גל-114·G35: מאמת-האתחול אינו-שחקן-כלכלי — אינו-משלם-ואינו-מקבל-שירותים (ההון-שלו-ערבות, לא-מחזור)
-    const others = ACCOUNTS.filter((a) => a.id !== soldier && a.kind !== "pool" && a.id !== "treasury" && a.id !== "boot-verifier");
+    const others = ACCOUNTS.filter((a) => a.id !== soldier && a.kind !== "pool" && a.kind !== "grid" && a.id !== "treasury" && a.id !== "boot-verifier"); // G77-b: חיילי-הגריד אינם-מוגרלים-במסלולי-הקיים — מסלול-הדלק-הייעודי-שלהם (אפס-שינוי-התנהגות)
     const to = pick(others).id;
     const svc = pick(SERVICES);
     const units = Math.random() < 0.8 ? 1 : 2; // גל-114·G35: משקול-ליחידה-אחת — התאמת-ארנקים (היה-1–8 אחיד)
@@ -626,6 +656,10 @@ function tick() {
         if (tx) { budget -= amtMu; paceLeft -= amtMu; } else wageBlocked++;
       }
     }
+    // G77-b · מפעל-התדלוק הריבוני (כל-FUEL_TICK_EVERY טיקים ≈ 2 דק'): טפטוף-דטרמיניסטי
+    // מהכספת אל חיילי-הגריד (כולל saos-0004) לפי חוקי-רצפה/תקרה/רזרבה — קבלות-אמת
+    // על שרשרת-ה-hash, אידמפוטנטיות לפי planId (dedup refs), fail-closed על מחסור.
+    if (tickNo % FUEL_TICK_EVERY === 0) runFuelCycle(Date.now());
     // גל-85 · משאבת-נזילות-כספת (הזרימה-הסגורה שנעדרה): נמדד בפורנזיה 2026-10-17 —
     // הבריכה ינקה את-ה-USDS-המחזורי (8,047/8,049; כספת=1.7) → 0-קבלות. הכספת מוכרת-SAOS
     // לבריכה — עסקת-AMM אמת עם-השפעת-מחיר מלאה, אפס-הדפסה, היצע-קבוע. המכסה-לטיק מונעת
@@ -792,6 +826,8 @@ function replayTailFromSnapshot(s: { seq: number; lastH: string }): { replayed: 
         else if (t.kind === "infra" && t.from === "pool" && t.to === "treasury") { if (t.asset === "USDS") { pool.usds -= amtMu; incomeAccruedMu += amtMu; } else { pool.saos -= amtMu; incomeSaosMu += amtMu; } bal("pool").usds = pool.usds; bal("pool").saos = pool.saos; }
         else if (t.kind === "tax" || t.kind === "dex-fee") { if (t.to === "treasury" && t.asset === "USDS") incomeAccruedMu += amtMu; }
         else if (t.kind === "salary") { wagePaidMu += amtMu; if (t.from === "treasury" && t.asset === "USDS") winFeed(wageWin, t.ts, amtMu); } // גל-112·G33: סימטריית-replay-מלאה
+        else if (t.kind === "fuel") { fuelPaidMu += amtMu; } // G77-b: סימטריית-replay של מסלול-הדלק (חוק-הסימטריה)
+        else if (t.kind === "fuel-blocked") { fuelBlocked++; } // G77-b: סימטריית-replay של קבלות-החסימה
         if (t.kind === "service" && t.asset === "USDS") winFeed(serviceWin, t.ts, amtMu); // גל-116·G37: סימטריית-המהירות
         if (t.kind === "tax" && t.to === "treasury" && t.asset === "USDS") winFeed(taxWin, t.ts, amtMu); // גל-116·G37: סימטריית-המס
         byAccount[t.from] = (byAccount[t.from] ?? 0) + 1;
@@ -914,6 +950,9 @@ function boot() {
       dividendPaidMu = fromF(Number(s.dividendPaid ?? 0)); dividendRounds = Number(s.dividendRounds ?? 0);
       bondIssuedMu = fromF(Number(s.bondIssued ?? 0)); bondRepaidMu = fromF(Number(s.bondRepaid ?? 0)); bondInterestMu = fromF(Number(s.bondInterest ?? 0));
       bondLastTs = Number(s.bondLastTs ?? 0);
+      // G77-b · מדינת-מפעל-הדלק-שורדת-דורות
+      fuelPaidMu = fromF(Number(s.fuelPaid ?? 0)); fuelBlocked = Number(s.fuelBlocked ?? 0); fuelCycles = Number(s.fuelCycles ?? 0);
+      fuelLastPlanId = typeof s.fuelLastPlanId === "string" ? s.fuelLastPlanId : null;
       // גל-115 · G36 · מצב-המושל-שורד-דורות (חוק-חי · החלטות-פתוחות · הקפאות · פסקי-דין)
       if (s.gov) {
         if (s.gov.policy) { applyGovLaw(s.gov.policy); govLawFromBook = { law: govLawNow(), at: Number(s.savedAt ?? Date.now()), src: "snapshot" }; } // גל-116·G37: הסנאפשוט-עצמו-נולד-מהספר-האטום — המקור-מוצהר
@@ -1163,6 +1202,76 @@ function workingCapitalBootstrap() {
   return { allocated: total };
 }
 
+/* ═══ G77-b · מפעל-התדלוק הריבוני — הביצוע על ספר-ה-hash ═══
+ * חוקי-התוכנין (טהורים) ב-lib/fuel-stream; כאן הביצוע-האמיתי:
+ *  · כל-טפטוף = עסקת-"fuel" חתומה (apply · sha256(prev+body)) עם ref=fuel-<planId>-<חייל>
+ *    — dedup-ה-refs (seenRefs) הופך ריצה-חוזרת-באותו-מחזור לאידמפוטנטית-אמת.
+ *  · מחסור-כספת ⇒ קבלת-"fuel-blocked" כנה (amount 0) — החסימה-חתומה-בשרשרת,
+ *    אפס-יתרות-מפוברקות, אפס-טפטוף-שקט.
+ *  · אחרי-כל-מחזור: סנאפשוט-מחזור-הספר (state/audit/ledger-cycle[-<N>].json) —
+ *    חוב-החידוש (G76-c): מקור-ציטוט-מכונה עבור G77-c (אפס-עריכה-שם). */
+function runFuelCycle(now: number): FuelPlan {
+  if (sealing) return { ok: false, reason: "blocked-invalid-policy", cycle: 0, planId: "sealing", nowMs: now, drips: [], blocked: [{ subject: "engine", reason: "sealing" }], treasuryBeforeMu: 0n, treasuryAfterMu: 0n, totalMu: 0n };
+  fuelCycles++;
+  const roster = GRID_ROSTER.soldiers.map((s) => s.id);
+  const balancesMu = new Map<string, import("./lib/mu").Mu>();
+  for (const id of roster) balancesMu.set(id, bal(id).usds);
+  const plan = planFuelStream(now, roster, balancesMu, bal("treasury").usds, FUEL_POLICY);
+  fuelLastPlanId = plan.planId; fuelLastPlan = plan;
+  if (!plan.ok) {
+    // קבלת-חסימה כנה על-השרשרת (idempotent לפי-planId — ריצה-חוזרת לא מכפילה)
+    const ref = plan.blocked.find((b) => b.ref)?.ref ?? `fuel-blocked-${plan.planId}`;
+    if (!seenRefs.has(ref)) {
+      const tx = apply({ seq: seq + 1, ts: now, kind: "fuel-blocked", from: "treasury", to: "treasury", asset: "USDS", amount: 0, reason: `תדלוק-גריד נחסם (G77-b fail-honest): ${plan.reason} · ${plan.blocked.map((b) => b.reason).join(" · ").slice(0, 220)}`, ref });
+      if (tx) { rememberRef(ref); fuelBlocked++; }
+    }
+    return plan;
+  }
+  let applied = 0, deduped = 0;
+  for (const d of plan.drips) {
+    if (seenRefs.has(d.ref)) { deduped++; continue; } // אידמפוטנטיות: אותו-מחזור כבר נזרק
+    const tx = apply({ seq: seq + 1, ts: now, kind: "fuel", from: "treasury", to: d.to, asset: "USDS", amount: toF(d.amountMu), reason: d.reason, ref: d.ref });
+    if (tx) { rememberRef(d.ref); applied++; } else fuelBlocked++; // דחיית-איזון = כנה
+  }
+  fuelLastApplied = applied; fuelLastDeduped = deduped;
+  if (applied > 0 || plan.blocked.length > 0) {
+    console.log(`[fleet-economy] fuel-stream G77-b: מחזור ${plan.cycle} · planId ${plan.planId} · נזרקו ${applied}/${plan.drips.length} (dedup ${deduped}) · סך ${toF(plan.totalMu)} USDS · חסומים-כנים ${plan.blocked.length} · כספת ${toF(plan.treasuryAfterMu)}`);
+  }
+  return plan;
+}
+
+/* סנאפשוט-מחזור-הספר: כתיבה-אטומית (tmp+rename) של ledger-cycle-<N>.json + המצביע
+ * ledger-cycle.json — כל-השדות נמדדים-חי מהספר (verifyChain + יתרות + מוני-הדלק).
+ * המספור: cycle>0 מהקורא; אחרת nextCycleNumber (ברירת-המחדל 32 = חוב-החידוש). */
+function writeLedgerCycleFiles(cycle: number, outDir: string = STATE_DIR): { cycle: number; paths: string[] } {
+  const v = lastVerify && Date.now() - lastVerify.at < 10 * 60_000 && lastVerify.ok
+    ? { ok: lastVerify.ok, checked: lastVerify.checked, anchors: lastVerify.anchors }
+    : (() => { const r = verifyChain(); return { ok: r.ok, checked: r.checked, anchors: r.anchors?.length ?? 0 }; })();
+  const grid = GRID_ROSTER.soldiers;
+  const allCycles = (() => { try { return fs.readdirSync(path.join(outDir, "audit")).filter((f) => /^ledger-cycle-\d+\.json$/.test(f)).map((f) => Number(f.match(/\d+/)![0])); } catch { return []; } })();
+  const n = cycle > 0 ? cycle : nextCycleNumber(allCycles);
+  const balancesMu = new Map<string, import("./lib/mu").Mu>();
+  for (const [id, b] of balances) balancesMu.set(id, b.usds);
+  const snap = buildCycleSnapshot({
+    cycle: n, nowIso: new Date().toISOString(), engine: "fleet-economy", bookGen,
+    seq, headHash: lastH === "GENESIS" ? null : lastH,
+    verify: v,
+    baseRoster: SOLDIERS.map((s) => s.id),
+    gridRoster: grid,
+    balances: balancesMu, treasuryMu: bal("treasury").usds,
+    lastPlan: fuelLastPlan, fuelCycles, fuelPaidMu, fuelBlocked,
+    fundingRail: "STEEM/SBD → שער-הזרימות ext-flows (provenance venue+txid · G27/G28) · קרדיטים-פנימיים → מסלול-הדלק (lib/fuel-stream · G77-b)",
+    policy: FUEL_POLICY,
+  });
+  const dir = path.join(outDir, "audit");
+  fs.mkdirSync(dir, { recursive: true });
+  const write = (p: string, obj: unknown) => { const tmp = p + ".tmp"; fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n"); fs.renameSync(tmp, p); };
+  const paths: string[] = [];
+  try { const pN = path.join(dir, `ledger-cycle-${n}.json`); write(pN, snap); paths.push(path.relative(outDir, pN)); } catch { /* כנה */ }
+  try { const pL = path.join(dir, "ledger-cycle.json"); write(pL, snap); paths.push(path.relative(outDir, pL)); } catch { /* כנה */ }
+  return { cycle: n, paths };
+}
+
 /* הסגר-כנה של-קבצי-מדינה — אפס-תפירה-מזויפת, כל-ההיסטוריה-נשמרת-לביקורת */
 function quarantineState(reason: string) {
   const q = path.join(STATE_DIR, "quarantine");
@@ -1184,7 +1293,7 @@ function quarantineState(reason: string) {
  * (כמו-שגיט סומך על קומיטים); עוגנים-עוקבים (שבר-אמת שאינו מתגבש) = ok:false.
  * אפס-שכתוב-היסטוריה: השורות נשארות בדיוק כפי שנכתבו. /verify חושף anchors —
  * צמיחה-מעבר ל-3 = אזעקה. המקור-לתפרים נחסם בכותב-יחיד (economy-beat + heartbeat). */
-function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; anchors?: { seq: number; line: number }[] } {
+function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; anchors?: { seq: number; line: number }[]; headHash?: string } {
   let prev = "GENESIS"; let checked = 0; let prevWasAnchor = false; let lastSeq = 0;
   const anchors: { seq: number; line: number }[] = [];
   const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort();
@@ -1212,7 +1321,7 @@ function verifyChain(): { ok: boolean; checked: number; brokenAt?: number; ancho
   // Z2-15 · זנב-בלתי-מעוגן: הספר-נגמר-על-עוגן בלי-יורש-שמוכיח-עיגון-מחדש → שבר-אמת fail-closed
   // (קריסה-בין-flush-לסנאפשוט = בדיוק-מה-replayTailFromSnapshot נבנה-לטפל-בו)
   if (prevWasAnchor && anchors.length > 0) return { ok: false, checked, brokenAt: anchors[anchors.length - 1].seq, anchors };
-  return { ok: true, checked, anchors };
+  return { ok: true, checked, anchors, headHash: prev }; // G76-d: +עוגן-ראש-השרשרת (ה-h-החתום-האחרון) לקבלת-עיגון-קריאה
 }
 
 /* גל-109 · בליעת-זרימות-החוץ (G27): קריאה-ב-boot-בלבד (אחרי-shחזור-seenRefs →
@@ -1275,6 +1384,7 @@ function snapshotSave() {
     extImported: toF(extImportedMu), extPoolImported: toF(extPoolImportedMu), extCount, extDedup, extBad, // גל-109·G28: מדידת-ניתוב-שורדת-דורות
     incomeAccrued: toF(incomeAccruedMu), wagePaid: toF(wagePaidMu), wageBlocked, incomeSaos: toF(incomeSaosMu), // גל-111·G31-מומש
     dividendPaid: toF(dividendPaidMu), dividendRounds, bondIssued: toF(bondIssuedMu), bondRepaid: toF(bondRepaidMu), bondInterest: toF(bondInterestMu), bondLastTs, // גל-111·G32
+    fuelPaid: toF(fuelPaidMu), fuelBlocked, fuelCycles, fuelLastPlanId, // G77-b: מדינת-מפעל-הדלק-שורדת-דורות (התוכנית-עצמה-לא-נשמרת — היא-נגזרת-מהספר)
     gov: { policy: govLawNow(), pending: govPending, cooldowns: govCooldowns, stats: govStats }, // גל-115·G36: מצב-המושל-שורד-דורות
     seenRefs: Array.from(seenRefs.entries()).slice(-SEEN_REFS_SNAP),
     bg: bookGen }; // גל-55: דור-הספר-שורד-דורות
@@ -1311,6 +1421,12 @@ const server = Bun.serve({
             incomeAccruedUsds: +toF(incomeAccruedMu).toFixed(4), incomeSaos: +toF(incomeSaosMu).toFixed(4), wagePaidUsds: +toF(wagePaidMu).toFixed(4), wageBlocked,
             dividend: { paidUsds: +toF(dividendPaidMu).toFixed(4), rounds: dividendRounds, feeSharePct: sovPolicy.feeToTreasuryPct },
             bond: { enabled: sovPolicy.bondEnabled, issuedUsds: +toF(bondIssuedMu).toFixed(4), repaidUsds: +toF(bondRepaidMu).toFixed(4), interestUsds: +toF(bondInterestMu).toFixed(4), outstandingUsds: +toF(bondIssuedMu - bondRepaidMu).toFixed(4), annualBps: sovPolicy.bondInterestBpsAnnual, maxUsds: sovPolicy.bondMaxUsds, maxPoolSharePct: sovPolicy.bondMaxPoolSharePct },
+          },
+          fuel: { // G77-b · מפעל-התדלוק הריבוני (חיילי-הגריד · כולל saos-0004)
+            law: FUEL_LAW, roster: GRID_ROSTER.soldiers.map((s) => s.id), saos0004Registered: GRID_ROSTER.soldiers.some((s) => s.id === "saos-0004"),
+            policy: { cycleMs: FUEL_POLICY.cycleMs, floorUsds: +toF(FUEL_POLICY.floorMu).toFixed(4), ceilingUsds: +toF(FUEL_POLICY.ceilingMu).toFixed(4), reserveUsds: +toF(FUEL_POLICY.reserveMu).toFixed(4), maxDripUsds: +toF(FUEL_POLICY.maxDripMu).toFixed(4), cycleCapUsds: +toF(FUEL_POLICY.cycleCapMu).toFixed(4) },
+            cycles: fuelCycles, paidUsds: +toF(fuelPaidMu).toFixed(4), blocked: fuelBlocked, lastPlanId: fuelLastPlanId,
+            lastPlan: fuelLastPlan ? { ok: fuelLastPlan.ok, reason: fuelLastPlan.reason, cycle: fuelLastPlan.cycle, drips: fuelLastPlan.drips.length, blocked: fuelLastPlan.blocked.length, totalUsds: +toF(fuelLastPlan.totalMu).toFixed(6) } : null,
           },
           byKind, rejected, errors, seq, lastH,
           throughput: { attempts: attemptsTotal, rejectedCount: rejected, acceptancePct: attemptsTotal > 0 ? +(((attemptsTotal - rejected) / attemptsTotal) * 100).toFixed(1) : null, governor: { nBase, cap: N_CAP, min: N_MIN, windowAcceptance: lastGovAcc } },
@@ -1361,7 +1477,9 @@ const server = Bun.serve({
         }
         lastVerify = { at: Date.now(), ok: r.ok, checked: r.checked, anchors: r.anchors?.length ?? 0 };
         const rp = ensureParityOrHeal(replayParityLive(), r.ok); // גל-66: פערי-parity-חיים מתרפאים-בזמן-ריצה
-        return Response.json({ ...r, anchorsCount: r.anchors?.length ?? 0, replayParity, replayLive: rp });
+        /* G76-d · קנה-המידה-הכנה-פר-דור-ספר: הרישום קובע את הבסיס (0 תפרים = ספר-רציף);
+         * שדות-additive-בלבד — צרכנים-ישנים (anchorsCount) לא-נפגעים. */
+        return Response.json({ ...r, anchorsCount: r.anchors?.length ?? 0, anchorBaseline: ANCHOR_REG.baseline, anchorSource: ANCHOR_REG.source, anchorVerdict: anchorVerdict(r.anchors?.length ?? 0, ANCHOR_REG), anchorInherited: ANCHOR_REG.inherited, replayParity, replayLive: rp });
       }
       /* ── גל-116 · G37 · GET /claims — פנקס-הטענות-החי-של-הכלכלה ──
        * כל-טענה = מבחן-פלסיבילי-מכונה עם מדידה-טרייה (S-grade-מוכן לפדרציה ולעמיתים —
@@ -1394,7 +1512,7 @@ const server = Bun.serve({
         const treasUsds = toF(bal("treasury").usds);
         const runwayHours = burn2 > 0 ? treasUsds / burn2 : Infinity;
         const claims = [
-          { id: "chain-integrity", claim: "השרשרת-מאומתת-מקצה-לקצה (כל-תפר-מגובה-רציפות-מוכחת · עד-5-עוגנים-תעודה, מעל-זה-אזעקה) והשחזור-הפריטי-חי (replayParity)", pass: vOk === true && (vAnchors ?? 0) <= 5 && rp.parity === true, measured: { verifyOk: vOk, checked: vChecked, anchors: vAnchors, replayParity: rp.parity, replayDeltas: rp.deltas, replayDetail: (rp as any).detail ?? [], replaySource: rp.source, verifyAgeSec: vAgeSec, bookGen, parityHealed: (rp as any).healed ?? false } }, // גל-57: עוגן-מגובה (verifyChain-ok-כבר-fail-closed-על-עוגן-לא-מוכח) = תעודת-המשכיות לפי-דוקטרינת-גל-85 — לא-שבר; הקיפול-חי-כולל-את-ה-buffer (דיסק+buffer == זיכרון)
+          { id: "chain-integrity", claim: `השרשרת-מאומתת-מקצה-לקצה (כל-תפר-מגובה-רציפות-מוכחת · עד-${ANCHOR_REG.baseline}-עוגנים-מתועדים-לספר-החי [${ANCHOR_REG.source}], מעל-זה-אזעקה) והשחזור-הפריטי-חי (replayParity)`, pass: vOk === true && (vAnchors ?? 0) <= ANCHOR_REG.baseline && rp.parity === true, measured: { verifyOk: vOk, checked: vChecked, anchors: vAnchors, anchorBaseline: ANCHOR_REG.baseline, anchorSource: ANCHOR_REG.source, anchorInherited: ANCHOR_REG.inherited?.baseline ?? null, replayParity: rp.parity, replayDeltas: rp.deltas, replayDetail: (rp as any).detail ?? [], replaySource: rp.source, verifyAgeSec: vAgeSec, bookGen, parityHealed: (rp as any).healed ?? false } }, // G76-d: הבסיס-פר-דור-ספר-מהרישום (היה-5-קבוע — שייך-לדור-ישן); עוגן-מגובה (verifyChain-ok-כבר-fail-closed-על-עוגן-לא-מוכח) = תעודת-המשכיות לפי-דוקטרינת-גל-85 — לא-שבר; הקיפול-חי-כולל-את-ה-buffer (דיסק+buffer == זיכרון)
           { id: "law-is-book", claim: "החוק-החי-שווה-לשורת-החוק-החתומה-בספר (אפס-חוק-מפלג)", pass: govLawFromBook ? JSON.stringify(govLawFromBook.law) === JSON.stringify(lawNow) : null, measured: { fromBook: govLawFromBook?.law ?? null, live: lawNow, bookAt: govLawFromBook?.at ?? null, src: govLawFromBook?.src ?? null } },
           { id: "no-negative-balances", claim: "אף-חשבון-אינו-שלילי (USDS·SAOS — חשבונאות-כפולה-שלמה)", pass: minUsds >= 0 && minSaos >= 0, measured: { minUsds, minSaos, accounts: balances.size } },
           { id: "windows-alive", claim: "חלונות-המדידה-חיים (שכר ושירותים בשעה האחרונה)", pass: m2.wageRows1h > 0 && svc > 0, measured: { wageRows1h: m2.wageRows1h, wageUsds1h: +m2.wageUsds1h.toFixed(2), serviceUsds1h: +svc.toFixed(2) } },
@@ -1439,6 +1557,53 @@ const server = Bun.serve({
         });
         if (!r.ok) return Response.json({ ok: false, error: r.why, counters: { ingestOk, ingestFailed, ingestBad } }, { status: 422 });
         return Response.json({ ok: true, dedup: r.dedup ?? false, seq: r.tx?.seq ?? null, h: r.tx?.h ?? null });
+      }
+      /* ── G77-b · GET /cycle — סנאפשוט-מחזור-הספר, מכונה-למכונה (G77-c מצטט) ──
+       * קריאה-בלבד: כל-השדות נמדדים-חי (seq · headHash · רשומות · דלק · כספת) ·
+       * אפס-כתיבה-לדיסק (לקובץ כותבות רק הפעימות/POST /fuel/once). */
+      if (url.pathname === "/cycle") {
+        const v = lastVerify && Date.now() - lastVerify.at < 10 * 60_000 && lastVerify.ok
+          ? { ok: lastVerify.ok, checked: lastVerify.checked, anchors: lastVerify.anchors }
+          : (() => { const r = verifyChain(); return { ok: r.ok, checked: r.checked, anchors: r.anchors?.length ?? 0 }; })();
+        const allCycles = (() => { try { return fs.readdirSync(path.join(STATE_DIR, "audit")).filter((f) => /^ledger-cycle-\d+\.json$/.test(f)).map((f) => Number(f.match(/\d+/)![0])); } catch { return []; } })();
+        const balancesMu = new Map<string, import("./lib/mu").Mu>();
+        for (const [id, b] of balances) balancesMu.set(id, b.usds);
+        return Response.json(buildCycleSnapshot({
+          cycle: nextCycleNumber(allCycles), nowIso: new Date().toISOString(), engine: "fleet-economy", bookGen,
+          seq, headHash: lastH === "GENESIS" ? null : lastH, verify: v,
+          baseRoster: SOLDIERS.map((s) => s.id), gridRoster: GRID_ROSTER.soldiers,
+          balances: balancesMu, treasuryMu: bal("treasury").usds,
+          lastPlan: fuelLastPlan, fuelCycles, fuelPaidMu, fuelBlocked,
+          fundingRail: "STEEM/SBD → שער-הזרימות ext-flows (provenance venue+txid · G27/G28) · קרדיטים-פנימיים → מסלול-הדלק (lib/fuel-stream · G77-b)",
+          policy: FUEL_POLICY,
+        }));
+      }
+      /* ── G77-b · POST /fuel/once — מחזור-טפטוף-אחד-מיידי (loopback בלבד) ──
+       * ריצה-חוזרת-באותו-מחזור = אידמפוטנטית (dedup refs לפי-planId) · כותב
+       * את קבלות-הסנאפשוט לדיסק (ledger-cycle[-<N>].json) · body: {cycle?} */
+      if (url.pathname === "/fuel/once" && req.method === "POST") {
+        const ip = srv.requestIP(req);
+        const addr = (ip ? String(ip.address) : "").replace(/^::ffff:/, "");
+        if (addr !== "127.0.0.1" && addr !== "::1") return Response.json({ ok: false, error: "loopback-only" }, { status: 403 });
+        const clen = +(req.headers.get("content-length") ?? 0);
+        if (clen > 2_048) return Response.json({ ok: false, error: "payload-too-large" }, { status: 413 });
+        let body: any = {};
+        try { body = await req.json(); } catch { body = {}; }
+        const cycle = Number(body?.cycle);
+        const plan = runFuelCycle(Date.now());
+        flush();
+        let snapshot: { cycle: number; paths: string[] } | null = null;
+        try { snapshot = writeLedgerCycleFiles(Number.isInteger(cycle) && cycle > 0 ? cycle : 0); } catch (e) { sealLog({ action: "fuel-cycle-snapshot-fail", error: String(e).slice(0, 160) }); }
+        // סידור-BigInt-בטוח (µ¢ → 6-ספרות בקצה-בלבד — אפס-פלואט-בחוק):
+        const planOut = plan ? {
+          ok: plan.ok, reason: plan.reason, cycle: plan.cycle, planId: plan.planId, nowMs: plan.nowMs,
+          drips: plan.drips.map((d) => ({ to: d.to, amountUsds: +toF(d.amountMu).toFixed(6), ref: d.ref, reason: d.reason })),
+          blocked: plan.blocked,
+          treasuryBeforeUsds: +toF(plan.treasuryBeforeMu).toFixed(6),
+          treasuryAfterUsds: +toF(plan.treasuryAfterMu).toFixed(6),
+          totalUsds: +toF(plan.totalMu).toFixed(6),
+        } : null;
+        return Response.json({ ok: true, applied: fuelLastApplied, deduped: fuelLastDeduped, plan: planOut, snapshot, seq, lastH });
       }
       return new Response("not found", { status: 404 });
     } catch (e) {
@@ -1783,8 +1948,12 @@ async function sealAll(): Promise<void> {
     try { fs.rmSync(lock, { force: true }); } catch { /* כנה */ }
   }
 }
-setInterval(sealAll, 10 * 60 * 1000);
-setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עלייה
+/* G77-b: מגרש-חול (FLEET_STATE_DIR מוגדר) לא אוטם-את-הקנון — איטום-הכספת שייך
+ * רק למנוע-החי-הקנוני; ה-CLI/--once רץ-שניות-ספורות-ואינו-נוגע-במאגרים. */
+if (!process.env.FLEET_STATE_DIR) {
+  setInterval(sealAll, 10 * 60 * 1000);
+  setTimeout(sealAll, 45_000); // אטימה ראשונה דקה-אחרי-עלייה
+}
 
 const bootResult = boot();
 const g35Reconcile = genesisReconcile(); // גל-114·G35: שלמות-הספר-לפני-כל-זרימה
