@@ -1,1 +1,165 @@
-Lyog4pWQ4pWQ4pWQIHJlY2VpcHQtc2lnbi50cyDigJQg16nXqNep16jXqi3Xl9eq15nXnteV16og16LXnCDXodek16gt15QtaGFzaCDCtyDXp9eR15zXldeqLdeR15nXp9eV16jXqiDXl9eq15XXnteV16og4pWQ4pWQ4pWQCiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQogKiBkaXJlY3RpdmUgwqczIChzaWduZWQgYXVkaXQgcmVjZWlwdHMpIMK3IHNvdmVyZWlnbi1sYW5lIMK3IHdhdmUgMTkuODAKICogKHRyYWNlIDFhMTY5NzYyMmUzYTJlYTUpIMK3IDIwMjYtMTAtMjMKICoKICog15TXkdei15nXlC3XlNee15PXldeT15QgKHN0YXRlL2F1ZGl0L3NlZ21lbnRzLmpzb24pOiDXqdeo16nXqNeqLdeULWhhc2ggKGgvcHJldikg157Xldeb15nXl9eUCiAqINep15zXnteV16ot16TXqC3XqNep15XXnteULCDXkNeR15wg16nXm9eq15XXkS3Xntec15Ag16nXnC3XlNeh16TXqCDigJQg15fXmdep15XXkS3XnteX15PXqSDXqdecINeb15wt15QtaCDXkdee16fXkdeZ15wg4oCUCiAqINeR15zXqteZLdeg15nXqtefLdec15LXmdec15XXmSDXnteR15zXmS3XoteV15LXnyDXqdeg157XpteQLdee15fXldelLdec16HXpNeoLiDXlNek16rXqNeV1586INeX16rXmdee16ogSE1BQy1TSEEyNTYKICog16LXnCAoc2VxLCBoLCBwcmV2U2lnKSDigJQg16nXqNep16jXqi3Xl9eq15nXnteV16og157Xp9eR15nXnNeULiDXqteV16fXoyDXqdee16nXm9eq15Eg15DXqi3XlNeh16TXqCDXl9eZ15nXkQogKiDXnNeU16rXl9eZ15wg157XlNee16TXqteXIOKAlCDXqdec15At16DXntem15Ag15HXqNeZ16TXlSDXldec15At15HXp9eV15MsINeo16cg15HXodeR15nXkdeqLdeU16jXmdem15QuCiAqCiAqINeX15XXp9eZLdeU15HXqNeW15w6CiAqICDCtyBmYWlsLWNsb3NlZDog157XpNeq15ct15fXodeoL9eo15nXpyDihpIg15bXoten15QuINec16LXldec150t15zXkCDXl9eq15nXnteULdep16fXmNeUINeQ15Ug15DXmdee15XXqi3Xqden15guCiAqICDCtyDXkNek16Et16rXnNeV16ot15fXldelOiBub2RlOmNyeXB0byDXkdec15HXkyAo15TXodek16gt15TXldeQINeQ16TXoS3Xqtec15XXqiDigJQgcGFja2FnZS5qc29uKS4KICogIMK3INeQ16TXoS3Xntek16rXl9eV16ot15HXp9eV15M6INeU157XpNeq15cg157XkteZ16Ig154tRkxFRVRfUkVDRUlQVF9LRVkgKGN1c3RvZHkg16nXnC3XlNeR16LXnNeZ150pOwogKiAgICDXlNee16TXqteX15XXqi3XlNeZ15fXmdeT15nXnS3Xkden15XXkyDXlNedINeU15bXqNeZ16fXmdedINeR16rXldeaLdeU15jXodeYLgogKiAgwrcg16fXkdec15QgPSB7c2VxLCBoLCBzLCBwLCBhbGd9IOKAlCBwINeU15nXkC3XlNeX16rXmdee15Qt15TXp9eV15PXnteqIChHRU5FU0lTLVNJRyDXnNeo15DXqdeV16DXlCk7CiAqICAgIGhlYWRTaWcg15DXl9eTINen15XXkdeiINeQ16ot15vXnC3XlNeW16DXkS3XlNeX16rXldedLgogKiAgwrcg16TXoteo15ktc2VxINeX15XXp9eZ15nXnSAo16DXnteT15PXlTogc2VnbWVudHMuanNvbiBzZXFfbWF4IDc3NTQ0INee15XXnCA3NzUyMyDXqNep15XXnteV16opIOKAlAogKiAgICDXlNeQ15nXnteV16og15PXldeo16kg16LXnNeZ15nXlC3XnteX157Xmdeo15QsINec15AgKzEuCiAqLwppbXBvcnQgeyBjcmVhdGVIbWFjIH0gZnJvbSAiY3J5cHRvIjsKCi8qKiDXkNec15LXldeo15nXqtedLdeU15fXqteZ157XlCDigJQg16LXldeS158t15fXldem15Qt16nXpNeV16o6INeV16fXmNeV16ggUkZDIDQyMzEgIzEg157XkNeV157XqiDXnteV15wKICogc3RhdGUvYXVkaXQvdmVyaWZ5X3NpZ25hdHVyZXMucHkgKHN0ZGxpYiDXqdecIFB5dGhvbiAzLjEyKSAqLwpleHBvcnQgY29uc3QgQUxHID0gIkhNQUMtU0hBMjU2IjsKCi8qKiDXqteX15nXnNeZ16ot16nXqNep16jXqi3XlNeX16rXmdee15XXqiAo15HXnten15HXmdecINecLUdFTkVTSVMg16nXnCDXqdeo16nXqNeqLdeULWhhc2gpICovCmV4cG9ydCBjb25zdCBHRU5FU0lTX1NJRyA9ICJHRU5FU0lTLVNJRyI7CgovKiog16jXqdeV157Xqi3Xodek16gg4oCUINeb15wt157XlC3XnNeX16rXmdee15Qg15fXqdeV15Eg15HXlSDXlNeV15Agc2VxICsgaCAo15QtaGFzaCDXlNee15fXldeZ15Et15vXkdeoLdei16bXnteVCiAqINee15vXodeUINeQ16ot15vXnC3XlNeq15XXm9efOiBoID0gc2hhMjU2KNeo16nXldee15Qt157XnNeQ15Qt15HXnNeZLWggKyBwcmV2KSkgKi8KZXhwb3J0IHR5cGUgSGFzaFJlY29yZCA9IHsgc2VxOiBudW1iZXI7IGg6IHN0cmluZyB9ICYgUmVjb3JkPHN0cmluZywgdW5rbm93bj47CgovKiog16fXkdec15Qt15fXqteV157XlDog16LXk9eV16og16LXnCAoc2VxLCBoKSDXkdep16jXqdeo16ogKi8KZXhwb3J0IHR5cGUgUmVjZWlwdCA9IHsgc2VxOiBudW1iZXI7IGg6IHN0cmluZzsgczogc3RyaW5nOyBwOiBzdHJpbmc7IGFsZzogc3RyaW5nIH07CgpleHBvcnQgdHlwZSBSZWNlaXB0U2VhbSA9IHsgc2VxOiBudW1iZXIgfCBudWxsOyBraW5kOiBzdHJpbmc7IGRldGFpbD86IHN0cmluZyB9OwoKZXhwb3J0IHR5cGUgVmVyaWZ5UmVzdWx0ID0gewogIG9rOiBib29sZWFuOwogIGNoZWNrZWQ6IG51bWJlcjsKICBzZWFtczogUmVjZWlwdFNlYW1bXTsKICBoZWFkU2lnOiBzdHJpbmc7Cn07Cgpjb25zdCBTSUdfTEVOID0gMzI7IC8qIGhleC0zMiDigJQg15DXldeq15Ut16fXpteRINeb157XlSBoMzIg16nXnCB2ZXJpZnlfY2hhaW4ucHkgKi8KCmZ1bmN0aW9uIGhtYWMzMihrZXk6IHN0cmluZywgbXNnOiBzdHJpbmcpOiBzdHJpbmcgewogIC8qINeR15PXmden16ot16jXmden15XXnyDXnNek15kt15DXldeo15og15HXnNeR15MgKNec15AtdHJpbSk6INee16TXqteX15XXqi3XkdeZ15nXmNeZ150g15fXlden15nXmdedICjXnNee16nXnCAweDBiCiAgICog16nXnCDXlden15jXldeoIFJGQyA0MjMxKSDXlNedIHdoaXRlc3BhY2Ug15zXpNeZLXRyaW0g16nXnC1KUyDigJQg15TXl9eV16cg15TXldeQINeg15XXm9eX15XXqi3Xntek16rXlywKICAgKiDXnNeQLdeU15nXkteZ15nXoNeqLdeq15XXldeZ150gKNeU15TXmdeS15nXmdeg15Qg16DXkNeb16TXqiDXkdep15vXkdeqLdeU16HXkdeZ15HXlCDXqdecIHJlcXVpcmVSZWNlaXB0S2V5KSAqLwogIGlmICh0eXBlb2Yga2V5ICE9PSAic3RyaW5nIiB8fCBrZXkubGVuZ3RoID09PSAwKSB7CiAgICB0aHJvdyBuZXcgRXJyb3IoInJlY2VpcHQtc2lnbiBmYWlsLWNsb3NlZDog157XpNeq15ct15fXqteZ157XlCDXqNeZ16cv15fXodeoIOKAlCDXkNeZ158t15fXqteZ157XlC3Xqden15jXlCIpOwogIH0KICByZXR1cm4gY3JlYXRlSG1hYygic2hhMjU2Iiwga2V5KS51cGRhdGUobXNnLCAidXRmOCIpLmRpZ2VzdCgiaGV4Iikuc2xpY2UoMCwgU0lHX0xFTik7Cn0KCi8qKiDXptei15Mt15fXqteZ157XlC3XkdeV15PXkyDigJQgSE1BQy1TSEEyNTYoa2V5LCBtc2cpWzozMi1oZXhdLgogKiDXoteV15LXny1SRkMgNDIzMTogc2lnSGVhZChrZXk9MHgwYsOXMjAsICJIaSBUaGVyZSIpID0gYjAzNDRjNjHigKYoMzIg16jXkNep15XXoNeZ150pICovCmV4cG9ydCBmdW5jdGlvbiBzaWdIZWFkKGtleTogc3RyaW5nLCBtc2c6IHN0cmluZyk6IHN0cmluZyB7CiAgcmV0dXJuIGhtYWMzMihrZXksIG1zZyk7Cn0KCmZ1bmN0aW9uIHN0ZXAoc2VxOiBudW1iZXIsIGg6IHN0cmluZywgcHJldlNpZzogc3RyaW5nLCBrZXk6IHN0cmluZyk6IHN0cmluZyB7CiAgcmV0dXJuIHNpZ0hlYWQoa2V5LCBgJHtzZXF9OiR7aH06JHtwcmV2U2lnfWApOwp9CgovKiog15fXqteZ157Xqi3Xlteg15Et16HXpNeoOiDXlNeV15zXmiDXotecLdeU16jXqdeV157XldeqINec16TXmS3XodeT16gt15TXp9eV15HXpSDXldee15fXlteZ16gg16fXkdec15Qt15fXqteV157XlCDXnNeb15wt15DXl9eqLgogKiBwcmV2U2lnINee15DXpNep16gg15zXlNee16nXmdeaINen15jXoi3Xp9eV15PXnSAo15bXoNeRLdeX15PXqSDXotecLdep16jXqdeo16ot16fXkdec15XXqi3Xmdep16DXlCkuCiAqIGZhaWwtY2xvc2VkOiDXntek16rXly3XqNeZ16cg4oaSINeW16LXp9eULiAqLwpleHBvcnQgZnVuY3Rpb24gc2lnbkxlZGdlclRhaWwoCiAgcmVjb3JkczogSGFzaFJlY29yZFtdLAogIGtleTogc3RyaW5nLAogIHByZXZTaWc6IHN0cmluZyA9IEdFTkVTSVNfU0lHLAopOiBSZWNlaXB0W10gewogIGlmICh0eXBlb2Yga2V5ICE9PSAic3RyaW5nIiB8fCBrZXkubGVuZ3RoID09PSAwKSB7CiAgICB0aHJvdyBuZXcgRXJyb3IoInJlY2VpcHQtc2lnbiBmYWlsLWNsb3NlZDogc2lnbkxlZGdlclRhaWwg15PXldeo16kg157XpNeq15cg4oCUIEZMRUVUX1JFQ0VJUFRfS0VZIik7CiAgfQogIGNvbnN0IG91dDogUmVjZWlwdFtdID0gW107CiAgbGV0IHAgPSBwcmV2U2lnOwogIGZvciAoY29uc3QgciBvZiByZWNvcmRzKSB7CiAgICBpZiAodHlwZW9mIHI/LnNlcSAhPT0gIm51bWJlciIgfHwgdHlwZW9mIHI/LmggIT09ICJzdHJpbmciIHx8IHIuaCA9PT0gIiIpIHsKICAgICAgdGhyb3cgbmV3IEVycm9yKGByZWNlaXB0LXNpZ24gZmFpbC1jbG9zZWQ6INeo16nXldee15Qg16TXkteV157XlCAoc2VxPSR7U3RyaW5nKHI/LnNlcSl9KSDigJQg15zXkC3XoNeX16rXnteqYCk7CiAgICB9CiAgICBjb25zdCBzID0gc3RlcChyLnNlcSwgci5oLCBwLCBrZXkpOwogICAgb3V0LnB1c2goeyBzZXE6IHIuc2VxLCBoOiByLmgsIHMsIHAsIGFsZzogQUxHIH0pOwogICAgcCA9IHM7CiAgfQogIHJldHVybiBvdXQ7Cn0KCi8qKiDXkNeZ157XldeqLden15HXnNeV16og4oCUIGZhaWwtY2xvc2VkLCDXm9ecLdeh15jXmdeZ15Qgc2VhbSDXnteg15XXntenOgogKiAgwrcgU0lHLU1JU01BVENIICDigJQg15QtSE1BQyDXlNee16nXldeX15bXqCDXnNeQLdeq15XXkNedINecLXMg15TXqdee15XXqCAo157XpNeq15ct16nXkteV15kv15jXntek16gpCiAqICDCtyBDSEFJTi1CUkVBSyAgIOKAlCBwINep15wt16fXkdec15Qg15zXkC3XqteV15DXnSDXnC1zINep15wt16fXldeT157XqteUCiAqICDCtyBDSEFJTi1ST09UICAgIOKAlCDXlNen15HXnNeULdeU16jXkNep15XXoNeUINec15At157Xl9eV15HXqNeqINec16rXl9eZ15zXmdeqLdeU16bXpNeV15nXlAogKiAgwrcgU0VRLU9SREVSICAgICDigJQgc2VxINec15At16LXldec15Qt157Xl9ee15nXqCAo15TXodek16gg157Xldeg15XXmNeV16DXmTsg16TXoteo15nXnSDXl9eV16fXmdeZ150pCiAqICDCtyBMRURHRVItTUlTTUFUQ0gg4oCUIGgg16nXnC3XlNen15HXnNeUINec15At16rXldeQ150g15DXqi3XlNeh16TXqC3XlNeX15kgKNeU16bXnNeR15Qg16DXkteTINep15vXqteV15Et157XnNeQKQogKiAgwrcgTUFMRk9STUVEICAgICDigJQg16fXkdec15Qg15fXodeo16ot16nXk9eV16oKICovCmV4cG9ydCBmdW5jdGlvbiB2ZXJpZnlSZWNlaXB0cygKICByZWNlaXB0czogUmVjZWlwdFtdLAogIGtleTogc3RyaW5nLAogIG9wdHM6IHsgbGVkZ2VyQnlTZXE/OiBNYXA8bnVtYmVyLCBzdHJpbmc+OyBwcmV2U2lnPzogc3RyaW5nIH0gPSB7fSwKKTogVmVyaWZ5UmVzdWx0IHsKICBpZiAodHlwZW9mIGtleSAhPT0gInN0cmluZyIgfHwga2V5Lmxlbmd0aCA9PT0gMCkgewogICAgdGhyb3cgbmV3IEVycm9yKCJyZWNlaXB0LXNpZ24gZmFpbC1jbG9zZWQ6IHZlcmlmeVJlY2VpcHRzINeT15XXqNepINee16TXqteXIOKAlCBGTEVFVF9SRUNFSVBUX0tFWSIpOwogIH0KICBjb25zdCBzZWFtczogUmVjZWlwdFNlYW1bXSA9IFtdOwogIGxldCBjaGVja2VkID0gMDsKICBjb25zdCBleHBlY3RlZFJvb3QgPSBvcHRzLnByZXZTaWcgPz8gR0VORVNJU19TSUc7CiAgbGV0IHByZXY6IFJlY2VpcHQgfCBudWxsID0gbnVsbDsKCiAgZm9yIChjb25zdCByIG9mIHJlY2VpcHRzKSB7CiAgICBpZiAoCiAgICAgIHR5cGVvZiByPy5zZXEgIT09ICJudW1iZXIiIHx8CiAgICAgIHR5cGVvZiByPy5oICE9PSAic3RyaW5nIiB8fAogICAgICB0eXBlb2Ygcj8ucyAhPT0gInN0cmluZyIgfHwKICAgICAgdHlwZW9mIHI/LnAgIT09ICJzdHJpbmciIHx8CiAgICAgIHI/LmFsZyAhPT0gQUxHCiAgICApIHsKICAgICAgc2VhbXMucHVzaCh7IHNlcTogdHlwZW9mIHI/LnNlcSA9PT0gIm51bWJlciIgPyByLnNlcSA6IG51bGwsIGtpbmQ6ICJNQUxGT1JNRUQiIH0pOwogICAgICBwcmV2ID0gbnVsbDsKICAgICAgY29udGludWU7CiAgICB9CiAgICAvKiDXodeT16gt15Qtc2VxINen15XXk9edIOKAlCDXlNeh16TXqCDXnteV16DXldeY15XXoNeZINeS150t15vXqdeU15fXqteZ157XldeqINei16bXntefINeq16fXmdeg15XXqiAqLwogICAgaWYgKHByZXYgIT09IG51bGwgJiYgci5zZXEgPD0gcHJldi5zZXEpIHsKICAgICAgc2VhbXMucHVzaCh7IHNlcTogci5zZXEsIGtpbmQ6ICJTRVEtT1JERVIiLCBkZXRhaWw6IGBzZXEgJHtyLnNlcX0gIT4gJHtwcmV2LnNlcX1gIH0pOwogICAgfQogICAgY29uc3QgZXhwZWN0ZWRQID0gcHJldiA9PT0gbnVsbCA/IGV4cGVjdGVkUm9vdCA6IHByZXYuczsKICAgIGlmIChyLnAgIT09IGV4cGVjdGVkUCkgewogICAgICBzZWFtcy5wdXNoKHsgc2VxOiByLnNlcSwga2luZDogIkNIQUlOLUJSRUFLIiwgZGV0YWlsOiBgcD0ke3IucC5zbGljZSgwLCA4KX0gZXhwZWN0ZWQ9JHtleHBlY3RlZFAuc2xpY2UoMCwgOCl9YCB9KTsKICAgIH0KICAgIGNvbnN0IGV4cGVjdFMgPSBzdGVwKHIuc2VxLCByLmgsIHIucCwga2V5KTsKICAgIGlmIChyLnMgIT09IGV4cGVjdFMpIHsKICAgICAgc2VhbXMucHVzaCh7IHNlcTogci5zZXEsIGtpbmQ6ICJTSUctTUlTTUFUQ0giLCBkZXRhaWw6IGBzPSR7ci5zLnNsaWNlKDAsIDgpfSBleHBlY3RlZD0ke2V4cGVjdFMuc2xpY2UoMCwgOCl9YCB9KTsKICAgIH0gZWxzZSB7CiAgICAgIGNoZWNrZWQgKz0gMTsKICAgIH0KICAgIGlmIChvcHRzLmxlZGdlckJ5U2VxKSB7CiAgICAgIGNvbnN0IGxpdmVIID0gb3B0cy5sZWRnZXJCeVNlcS5nZXQoci5zZXEpOwogICAgICBpZiAobGl2ZUggPT09IHVuZGVmaW5lZCkgewogICAgICAgIHNlYW1zLnB1c2goeyBzZXE6IHIuc2VxLCBraW5kOiAiTEVER0VSLU1JU01BVENIIiwgZGV0YWlsOiAic2VxINec15At16fXmdeZ150g15HXodek16gt15TXl9eZIiB9KTsKICAgICAgfSBlbHNlIGlmIChsaXZlSCAhPT0gci5oKSB7CiAgICAgICAgc2VhbXMucHVzaCh7IHNlcTogci5zZXEsIGtpbmQ6ICJMRURHRVItTUlTTUFUQ0giLCBkZXRhaWw6IGBoPSR7ci5oLnNsaWNlKDAsIDgpfSDXodek16g9JHtsaXZlSC5zbGljZSgwLCA4KX1gIH0pOwogICAgICB9CiAgICB9CiAgICBwcmV2ID0gcjsKICB9CgogIGNvbnN0IGhlYWRTaWcgPSByZWNlaXB0cy5sZW5ndGggPiAwID8gcmVjZWlwdHNbcmVjZWlwdHMubGVuZ3RoIC0gMV0ucyA6IGV4cGVjdGVkUm9vdDsKICByZXR1cm4geyBvazogc2VhbXMubGVuZ3RoID09PSAwLCBjaGVja2VkLCBzZWFtcywgaGVhZFNpZyB9Owp9CgovKiog157XpNeq15ct15TXmdeZ16bXldeoINee15LXmdeiINee15TXodeR15nXkdeUINeR15zXkdeTIOKAlCDXl9eh16gv16jXmdenIOKGkiDXltei16fXlCDXotedINep150t15TXntep16rXoNeUIChmYWlsLWNsb3NlZCkuCiAqIGN1c3RvZHk6IEZMRUVUX1JFQ0VJUFRfS0VZINep15wt15TXkdei15zXmdedIOKAlCDXkNejLdek16LXnSDXnNeQINeR16jXmdek15UsINec15Ag15HXp9eV15MsINec15Ag15HXnNeV15IuICovCmV4cG9ydCBmdW5jdGlvbiByZXF1aXJlUmVjZWlwdEtleShlbnZOYW1lID0gIkZMRUVUX1JFQ0VJUFRfS0VZIik6IHN0cmluZyB7CiAgY29uc3QgayA9IHByb2Nlc3MuZW52W2Vudk5hbWVdOwogIGlmICh0eXBlb2YgayAhPT0gInN0cmluZyIgfHwgay50cmltKCkgPT09ICIiKSB7CiAgICB0aHJvdyBuZXcgRXJyb3IoCiAgICAgIGByZWNlaXB0LXNpZ24gZmFpbC1jbG9zZWQ6ICR7ZW52TmFtZX0g15zXkC3XoNen15HXoiDXkdeh15HXmdeR15Qg4oCUINeX16rXmdee16ot16fXkdec15XXqiDXnteV16nXlNeZ16og16LXky3XkNeh16TXp9eqLdee16TXqteXIChjdXN0b2R5INep15wt15TXkdei15zXmdedKWAsCiAgICApOwogIH0KICByZXR1cm4gazsKfQo=
+/* ═══ receipt-sign.ts — שרשרת-חתימות על ספר-ה-hash · קבלות-ביקורת חתומות ═══
+ * ===========================================================================
+ * directive §3 (signed audit receipts) · sovereign-lane · wave 19.80
+ * (trace 1a1697622e3a2ea5) · 2026-10-23
+ *
+ * הבעיה-המדודה (state/audit/segments.json): שרשרת-ה-hash (h/prev) מוכיחה
+ * שלמות-פר-רשומה, אבל שכתוב-מלא של-הספר — חישוב-מחדש של כל-ה-h במקביל —
+ * בלתי-ניתן-לגילוי מבלי-עוגן שנמצא-מחוץ-לספר. הפתרון: חתימת HMAC-SHA256
+ * על (seq, h, prevSig) — שרשרת-חתימות מקבילה. תוקף שמשכתב את-הספר חייב
+ * להתחיל מהמפתח — שלא-נמצא בריפו ולא-בקוד, רק בסביבת-הריצה.
+ *
+ * חוקי-הברזל:
+ *  · fail-closed: מפתח-חסר/ריק → זעקה. לעולם-לא חתימה-שקטה או אימות-שקט.
+ *  · אפס-תלות-חוץ: node:crypto בלבד (הספר-הוא אפס-תלות — package.json).
+ *  · אפס-מפתחות-בקוד: המפתח מגיע מ-FLEET_RECEIPT_KEY (custody של-הבעלים);
+ *    המפתחות-היחידים-בקוד הם הזריקים בתוך-הטסט.
+ *  · קבלה = {seq, h, s, p, alg} — p היא-החתימה-הקודמת (GENESIS-SIG לראשונה);
+ *    headSig אחד קובע את-כל-הזנב-החתום.
+ *  · פערי-seq חוקיים (נמדדו: segments.json seq_max 77544 מול 77523 רשומות) —
+ *    האימות דורש עלייה-מחמירה, לא +1.
+ */
+import { createHmac } from "crypto";
+
+/** אלגוריתם-החתימה — עוגן-חוצה-שפות: וקטור RFC 4231 #1 מאומת מול
+ * state/audit/verify_signatures.py (stdlib של Python 3.12) */
+export const ALG = "HMAC-SHA256";
+
+/** תחילית-שרשרת-החתימות (במקביל ל-GENESIS של שרשרת-ה-hash) */
+export const GENESIS_SIG = "GENESIS-SIG";
+
+/** רשומת-ספר — כל-מה-לחתימה חשוב בו הוא seq + h (ה-hash המחויב-כבר-עצמו
+ * מכסה את-כל-התוכן: h = sha256(רשומה-מלאה-בלי-h + prev)) */
+export type HashRecord = { seq: number; h: string } & Record<string, unknown>;
+
+/** קבלה-חתומה: עדות על (seq, h) בשרשרת */
+export type Receipt = { seq: number; h: string; s: string; p: string; alg: string };
+
+export type ReceiptSeam = { seq: number | null; kind: string; detail?: string };
+
+export type VerifyResult = {
+  ok: boolean;
+  checked: number;
+  seams: ReceiptSeam[];
+  headSig: string;
+};
+
+const SIG_LEN = 32; /* hex-32 — אותו-קצב כמו h32 של verify_chain.py */
+
+function hmac32(key: string, msg: string): string {
+  /* בדיקת-ריקון לפי-אורך בלבד (לא-trim): מפתחות-בייטים חוקיים (למשל 0x0b
+   * של וקטור RFC 4231) הם whitespace לפי-trim של-JS — החוק הוא נוכחות-מפתח,
+   * לא-היגיינת-תווים (ההיגיינה נאכפת בשכבת-הסביבה של requireReceiptKey) */
+  if (typeof key !== "string" || key.length === 0) {
+    throw new Error("receipt-sign fail-closed: מפתח-חתימה ריק/חסר — אין-חתימה-שקטה");
+  }
+  return createHmac("sha256", key).update(msg, "utf8").digest("hex").slice(0, SIG_LEN);
+}
+
+/** צעד-חתימה-בודד — HMAC-SHA256(key, msg)[:32-hex].
+ * עוגן-RFC 4231: sigHead(key=0x0b×20, "Hi There") = b0344c61…(32 ראשונים) */
+export function sigHead(key: string, msg: string): string {
+  return hmac32(key, msg);
+}
+
+function step(seq: number, h: string, prevSig: string, key: string): string {
+  return sigHead(key, `${seq}:${h}:${prevSig}`);
+}
+
+/** חתימת-זנב-ספר: הולך על-הרשומות לפי-סדר-הקובץ ומחזיר קבלה-חתומה לכל-אחת.
+ * prevSig מאפשר להמשיך קטע-קודם (זנב-חדש על-שרשרת-קבלות-ישנה).
+ * fail-closed: מפתח-ריק → זעקה. */
+export function signLedgerTail(
+  records: HashRecord[],
+  key: string,
+  prevSig: string = GENESIS_SIG,
+): Receipt[] {
+  if (typeof key !== "string" || key.length === 0) {
+    throw new Error("receipt-sign fail-closed: signLedgerTail דורש מפתח — FLEET_RECEIPT_KEY");
+  }
+  const out: Receipt[] = [];
+  let p = prevSig;
+  for (const r of records) {
+    if (typeof r?.seq !== "number" || typeof r?.h !== "string" || r.h === "") {
+      throw new Error(`receipt-sign fail-closed: רשומה פגומה (seq=${String(r?.seq)}) — לא-נחתמת`);
+    }
+    const s = step(r.seq, r.h, p, key);
+    out.push({ seq: r.seq, h: r.h, s, p, alg: ALG });
+    p = s;
+  }
+  return out;
+}
+
+/** אימות-קבלות — fail-closed, כל-סטייה seam מנומק:
+ *  · SIG-MISMATCH  — ה-HMAC המשוחזר לא-תואם ל-s השמור (מפתח-שגוי/טמפר)
+ *  · CHAIN-BREAK   — p של-קבלה לא-תואם ל-s של-קודמתה
+ *  · CHAIN-ROOT    — הקבלה-הראשונה לא-מחוברת לתחילית-הצפויה
+ *  · SEQ-ORDER     — seq לא-עולה-מחמיר (הספר מונוטוני; פערים חוקיים)
+ *  · LEDGER-MISMATCH — h של-הקבלה לא-תואם את-הספר-החי (הצלבה נגד שכתוב-מלא)
+ *  · MALFORMED     — קבלה חסרת-שדות
+ */
+export function verifyReceipts(
+  receipts: Receipt[],
+  key: string,
+  opts: { ledgerBySeq?: Map<number, string>; prevSig?: string } = {},
+): VerifyResult {
+  if (typeof key !== "string" || key.length === 0) {
+    throw new Error("receipt-sign fail-closed: verifyReceipts דורש מפתח — FLEET_RECEIPT_KEY");
+  }
+  const seams: ReceiptSeam[] = [];
+  let checked = 0;
+  const expectedRoot = opts.prevSig ?? GENESIS_SIG;
+  let prev: Receipt | null = null;
+
+  for (const r of receipts) {
+    if (
+      typeof r?.seq !== "number" ||
+      typeof r?.h !== "string" ||
+      typeof r?.s !== "string" ||
+      typeof r?.p !== "string" ||
+      r?.alg !== ALG
+    ) {
+      seams.push({ seq: typeof r?.seq === "number" ? r.seq : null, kind: "MALFORMED" });
+      prev = null;
+      continue;
+    }
+    /* סדר-ה-seq קודם — הספר מונוטוני גם-כשהחתימות עצמן תקינות */
+    if (prev !== null && r.seq <= prev.seq) {
+      seams.push({ seq: r.seq, kind: "SEQ-ORDER", detail: `seq ${r.seq} !> ${prev.seq}` });
+    }
+    const expectedP = prev === null ? expectedRoot : prev.s;
+    if (r.p !== expectedP) {
+      seams.push({ seq: r.seq, kind: "CHAIN-BREAK", detail: `p=${r.p.slice(0, 8)} expected=${expectedP.slice(0, 8)}` });
+    }
+    const expectS = step(r.seq, r.h, r.p, key);
+    if (r.s !== expectS) {
+      seams.push({ seq: r.seq, kind: "SIG-MISMATCH", detail: `s=${r.s.slice(0, 8)} expected=${expectS.slice(0, 8)}` });
+    } else {
+      checked += 1;
+    }
+    if (opts.ledgerBySeq) {
+      const liveH = opts.ledgerBySeq.get(r.seq);
+      if (liveH === undefined) {
+        seams.push({ seq: r.seq, kind: "LEDGER-MISMATCH", detail: "seq לא-קיים בספר-החי" });
+      } else if (liveH !== r.h) {
+        seams.push({ seq: r.seq, kind: "LEDGER-MISMATCH", detail: `h=${r.h.slice(0, 8)} ספר=${liveH.slice(0, 8)}` });
+      }
+    }
+    prev = r;
+  }
+
+  const headSig = receipts.length > 0 ? receipts[receipts.length - 1].s : expectedRoot;
+  return { ok: seams.length === 0, checked, seams, headSig };
+}
+
+/** מפתח-הייצור מגיע מהסביבה בלבד — חסר/ריק → זעקה עם שם-המשתנה (fail-closed).
+ * custody: FLEET_RECEIPT_KEY של-הבעלים — אף-פעם לא בריפו, לא בקוד, לא בלוג. */
+export function requireReceiptKey(envName = "FLEET_RECEIPT_KEY"): string {
+  const k = process.env[envName];
+  if (typeof k !== "string" || k.trim() === "") {
+    throw new Error(
+      `receipt-sign fail-closed: ${envName} לא-נקבע בסביבה — חתימת-קבלות מושהית עד-אספקת-מפתח (custody של-הבעלים)`,
+    );
+  }
+  return k;
+}
