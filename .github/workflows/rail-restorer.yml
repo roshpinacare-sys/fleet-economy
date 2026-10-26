@@ -1,0 +1,102 @@
+# גל-82ג · rail-restorer — משביר-דחיפה של פס-הקבלות (trace 1a178c614313ad05 · wave #82)
+#
+# השורש-שנמדד: סערת-האטימה (vault-seal [auto-economy] + vault-sync [push-reviver])
+# מוחקת את קבצי-הפס כל ~10 דקות, וה-guardian (cron */10 ב-giant) מתעכב בתור-
+# המתזמן של גיטהאב עד שעות (נמדד 2026-10-26: ריצה-אחת ב-5 שעות) — הוא מפסיד-במירוץ.
+#
+# הריפוי: טריגר push — אירועי-push יורים-בשניות (לא-בתור-המתזמן) → כל-דחיפה-של-
+# הסערה מושבת-מיידית מהבלובים-הקנוניים של giant. המירוץ נשגר-מבנייתית.
+#
+# חוקי-אמת: השחזור רק-מהבלובים-הקנוניים (giant sovereign/rail-canonical) עם
+# אימות-sha256 מול המניפסט; עץ-קנון → אפס-קומיט (no-op-כנה); fail-honest בכל-שלב.
+# בטיחות-לולאה: ריצת-שחזור-שלא-דוחפת-כלום לא מציתה-ריצה-נוספת (אין-push → אין-טריגר).
+
+name: rail-restorer
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # גל-82ג · טריגר-push לא-נורה על-דחיפות-GITHUB_TOKEN של-הסערה (חוק-מניעת-לולאה
+    # של-גיטהאב — נמדד: 8+ דחיפות-אטימה 16:05-16:38Z, אפס-הצתות) → קאדנס-גיבוי.
+    # הנשכבת: cron זה + dispatch-שרשרת מ-receipts-guard + guardian */10 ב-giant.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rail-restorer
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Restore receipts rail from canonical blobs (sha-verified)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          CANON="sovereign/rail-canonical"
+          INTACT=0; RESTORED=0; REFUSED=0
+          declare -A MAP=(
+            ["lib/receipt-sign.ts"]="lib_receipt-sign.ts.b64:beff43c87e1da3b1"
+            ["tests/receipt-sign.test.ts"]="tests_receipt-sign.test.ts.b64:c6337da164c63c65"
+            ["scripts/fleet-receipts-guard-core.py"]="scripts_fleet-receipts-guard-core.py.b64:db896432ff6a0609"
+            [".github/workflows/receipts-guard.yml"]=".github_workflows_receipts-guard.yml.b64:0be08771e24dc785"
+            ["state/audit/verify_signatures.py"]="state_audit_verify_signatures.py.b64:cc935b38962b4c47"
+          )
+          mkdir -p /tmp/canon
+          CHANGED_FILES=()
+          for path in "${!MAP[@]}"; do
+            IFS=':' read -r blob want <<< "${MAP[$path]}"
+            curl -sS -m 30 -H "Authorization: Bearer ${GH_TOKEN}" \
+              "https://raw.githubusercontent.com/roshpinacare-sys/giant/main/${CANON}/${blob}" -o "/tmp/canon/${blob}"
+            if [ ! -s "/tmp/canon/${blob}" ]; then
+              echo "FAIL-HONEST: blob ${blob} unreachable"; REFUSED=$((REFUSED+1)); continue
+            fi
+            content=$(base64 -d "/tmp/canon/${blob}" | head -c 100000000)
+            got=$(base64 -d "/tmp/canon/${blob}" | sha256sum | cut -d' ' -f1)
+            if [ "${got:0:16}" != "${want}" ]; then
+              echo "FAIL-CLOSED: ${path} blob sha ${got:0:16} != manifest ${want} — אפס-כתיבה"; REFUSED=$((REFUSED+1)); continue
+            fi
+            if [ -f "$path" ]; then
+              have=$(sha256sum "$path" | cut -d' ' -f1)
+              if [ "${have:0:16}" = "${want}" ]; then
+                echo "INTACT ${path}"; INTACT=$((INTACT+1)); continue
+              fi
+              echo "DIVERGENT ${path} (have ${have:0:16} want ${want})"
+            else
+              echo "ABSENT ${path}"
+            fi
+            mkdir -p "$(dirname "$path")"
+            base64 -d "/tmp/canon/${blob}" > "$path"
+            RESTORED=$((RESTORED+1)); CHANGED_FILES+=("$path")
+            echo "RESTORED ${path} · sha256[:16]=${got:0:16} == manifest"
+          done
+          echo "receipt: intact=${INTACT} restored=${RESTORED} refused=${REFUSED}"
+          if [ "$RESTORED" -eq 0 ]; then
+            echo "no-op: rail intact (או-כל-השחזורים-נדחו) — אין-קומיט, אין-הצתה-מעגלית"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- "${CHANGED_FILES[@]}"
+          git commit -q -m "rail-restorer: ${RESTORED} rail paths restored sha-verified from canonical blobs — הסערה-מושבה-בשניות (גל-82ג · trace 1a178c614313ad05)"
+          for attempt in 1 2 3; do
+            if git pull --rebase -q origin main; then :; else echo "rebase-fail attempt ${attempt} (fail-honest)"; git rebase --abort 2>/dev/null || true; fi
+            if git push -q origin HEAD:main; then echo "push rc=0 attempt ${attempt}"; break; fi
+            rc=$?
+            echo "push rc=${rc} attempt ${attempt}"
+            if [ "$attempt" = "3" ]; then echo "FAIL-HONEST: 3/3 push attempts failed"; exit 1; fi
+            sleep 5
+          done
+          echo "receipt-final: restored=${RESTORED} pushed=yes"
