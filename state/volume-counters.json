@@ -1,0 +1,109 @@
+{
+ "schema": "SAOS-VOLUME-COUNTERS/1",
+ "generatedAt": "2026-10-27T13:11:07.373Z",
+ "orderbook": {
+  "fills": 265,
+  "fillsRealTx": 265,
+  "volumeSteem": 11086.554,
+  "volumeSbd": 1149.959,
+  "byTrader": {
+   "headcorner": {
+    "fills": 264,
+    "steem": 340.37600000000003,
+    "sbd": 1114.888
+   },
+   "hcsoldier4": {
+    "fills": 1,
+    "steem": 0,
+    "sbd": 0.155
+   }
+  }
+ },
+ "ladder": {
+  "treasury": {
+   "receipts": 54,
+   "green": 36,
+   "red": 0,
+   "executedTx": 35,
+   "errors": 46,
+   "notionalSbd": 3.7486971,
+   "notionalSteem": 35.85,
+   "openOrders": 2,
+   "lastVerdict": "LADDER-ACTED"
+  },
+  "army": {
+   "receipts": 452,
+   "green": 331,
+   "red": 74,
+   "executedTx": 1587,
+   "errors": 447,
+   "notionalSbd": 415.256717574,
+   "notionalSteem": 3890.338,
+   "openOrders": null,
+   "lastVerdict": "ARMY-ACTED"
+  }
+ },
+ "gearbox": {
+  "gear": 1,
+  "greenStreak": 1,
+  "lastVerdict": "ARMY-ACTED",
+  "nextGear": 2,
+  "requireNextGreenStreak": 6,
+  "failClosed": false
+ },
+ "economy": {
+  "seq": null,
+  "poolFeesUsds": null,
+  "poolFeesSaos": null
+ },
+ "sources": [
+  {
+   "name": "saos-dex:external-profit",
+   "url": "https://raw.githubusercontent.com/roshpinacare-sys/saos-dex/main/grids/state/external-profit.jsonl",
+   "http": 200,
+   "bytes": 145282,
+   "rows": 291,
+   "bad": 0
+  },
+  {
+   "name": "saos-dex:arb-ledger",
+   "url": "https://raw.githubusercontent.com/roshpinacare-sys/saos-dex/main/grids/state/arb-ledger.json",
+   "http": 200,
+   "bytes": 97457,
+   "rows": 200,
+   "bad": 0
+  },
+  {
+   "name": "saos-dex:policy-gears",
+   "url": "https://raw.githubusercontent.com/roshpinacare-sys/saos-dex/main/grids/state/policy-gears.json",
+   "http": 200,
+   "bytes": 5873,
+   "rows": null,
+   "bad": 0
+  },
+  {
+   "name": "saos-dex:treasury-receipts",
+   "url": "https://raw.githubusercontent.com/roshpinacare-sys/saos-dex/main/grids/state/treasury-receipts.jsonl",
+   "http": 200,
+   "bytes": 38913,
+   "rows": 54,
+   "bad": 0
+  },
+  {
+   "name": "saos-dex:army-receipts",
+   "url": "https://raw.githubusercontent.com/roshpinacare-sys/saos-dex/main/grids/state/army-receipts.jsonl",
+   "http": 200,
+   "bytes": 2759220,
+   "rows": 452,
+   "bad": 0
+  },
+  {
+   "name": "fleet-economy:snapshot",
+   "url": "https://raw.githubusercontent.com/roshpinacare-sys/fleet-economy/main/state/snapshot.json",
+   "http": 404,
+   "bytes": 0,
+   "rows": null,
+   "bad": 0
+  }
+ ]
+}

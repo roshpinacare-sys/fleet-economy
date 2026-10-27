@@ -1,1 +1,121 @@
-IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwojIGZsZWV0LXJlY2VpcHRzLWd1YXJkLWNvcmUucHkg4oCUIGRldGVybWluaXN0aWMgY29yZSBvZiB0aGUgZmxlZXQtZWNvbm9teSByZWNlaXB0cy1yYWlsIGd1YXJkLgojIHNvdmVyZWlnbi1sYW5lIHdhdmUgMTkuODUgKHRyYWNlIDFhMTZlY2FhM2UwMTQwNTEpLCBNQVNURVIgRElSRUNUSVZFIMKnMiBzZXR0bGVtZW50LXBsYW5lIGludGVncml0eSArIMKnOCBkZWFkbG9jay1icmVhay4KIwojIE1lYXN1cmVkIGNsYXNzIGJlaW5nIG1lY2hhbml6ZWQgKGxlZGdlciAjNzQgKyBzb3ZlcmVpZ24tbGFuZSAxOS44MSByZWNlaXB0KTogdGhlIHZhdWx0LXNlYWwgc3Rvcm0ncwojIGB2YXVsdC1zeW5jIC1zIG91cnNgIG1lcmdlcyBlcmFzZSB0aGUgZmxlZXQtZWNvbm9teSByZWNlaXB0cyByYWlsIChsaWIvcmVjZWlwdC1zaWduLnRzICsgY29tcGFuaW9ucykuCiMgTWVhc3VyZWQgc3Vydml2YWwgb2YgYSByZWxhbmQ6IDJtMTdzICgxNTo1Njo1NVrihpIxNTo1OToxMlopLiBNYW51YWwgcmVsYW5kcyBhcmUgYSB0cmVhZG1pbGw7IHRoaXMgY29yZQojIG1ha2VzIGRldGVjdGlvbitwbGFuIGRldGVybWluaXN0aWMgYW5kIHRlc3RhYmxlLCB0aGUgLnNoIGxvb3AgbWFrZXMgdGhlIHJlbGFuZCBjb250aW51b3VzLgojCiMgTGF3cyBjYXJyaWVkIGZyb20gdGhlIGdpYW50IHN3YWxsb3ctZ3VhcmQgY2xhaW0gKGFnZW50LTUtbGFuZUQsIHdhdmUgMTkuODMpOgojICAgLSBhYnNlbmNlIG9mIGEgY2Fub25pY2FsIHBhdGggPSBzd2FsbG93IChyZXNjdWUpOyBjb250ZW50LWRpZmYgPSBhbGVydC1vbmx5IChuZXZlciBmaWdodCBldm9sdXRpb24pCiMgICAtIHJlc2N1ZSBvbmx5IGZyb20gYWRvcHRlZCBibG9icyDigJQgdGhlIGd1YXJkIGludmVudHMgbm90aGluZyAoZmFpbC1jbG9zZWQpCiMgICAtIHJlY2VpcHRzIGFyZSBzaGEyNTYgaGFzaC1saW5rZWQgKHByZXZIYXNo4oaSaGFzaCk7IHRhbXBlciBpcyBkZXRlY3RhYmxlCiMgc3RkbGliIG9ubHkuIE5vIG5ldHdvcmsuIE5vIGNsb2NrIGluIGRldGVjdCgpIChjbG9jayBpbmplY3RlZCBieSB0aGUgbG9vcCkuCmltcG9ydCBoYXNobGliLCBqc29uCgpDQU5PTklDQUxfUkFJTCA9ICgKICAgICJsaWIvcmVjZWlwdC1zaWduLnRzIiwKICAgICJ0ZXN0cy9yZWNlaXB0LXNpZ24udGVzdC50cyIsCiAgICAic3RhdGUvYXVkaXQvdmVyaWZ5X3NpZ25hdHVyZXMucHkiLAogICAgInN0YXRlL2F1ZGl0L3JlY2VpcHQtMjAyNi0xMC0yMy13YXZlMTk4MC5qc29uIiwKKQoKCmRlZiBkZXRlY3QodHJlZSwgYWRvcHRlZCk6CiAgICAiIiJ0cmVlOiB7cGF0aDogYmxvYl9zaGFfb3JfZW1wdHlzdHJpbmd9OyBhZG9wdGVkOiB7cGF0aDogYmxvYl9zaGF9LgoKICAgIFJldHVybnMge3N3YWxsb3dzLCBhbGVydHMsIHBsYW4sIHBsYW5FcnJvcn0uCiAgICAtIHN3YWxsb3c6IHJhaWwgcGF0aCBhYnNlbnQgKGVtcHR5IHNoYSBvciBtaXNzaW5nIGtleSkg4oaSIHJlc2N1ZSBjYW5kaWRhdGUuCiAgICAtIGFsZXJ0OiBwYXRoIHByZXNlbnQgYnV0IHNoYSBkaWZmZXJzIGZyb20gYWRvcHRlZCAoY29udGVudCBkcmlmdCkg4oCUIE5FVkVSIHJlc2N1ZWQuCiAgICAtIHBsYW5FcnJvcjogbm9uLU5vbmUgd2hlbiBhIHN3YWxsb3cgaGFzIG5vIGFkb3B0ZWQgc291cmNlIChmYWlsLWNsb3NlZCwgZW1wdHkgcGxhbikuCiAgICAiIiIKICAgIHN3YWxsb3dzLCBhbGVydHMgPSBbXSwgW10KICAgIGZvciBwIGluIENBTk9OSUNBTF9SQUlMOgogICAgICAgIHNoYSA9IHRyZWUuZ2V0KHApCiAgICAgICAgaWYgbm90IHNoYToKICAgICAgICAgICAgc3dhbGxvd3MuYXBwZW5kKHApCiAgICAgICAgZWxpZiBwIGluIGFkb3B0ZWQgYW5kIGFkb3B0ZWRbcF0gIT0gc2hhOgogICAgICAgICAgICBhbGVydHMuYXBwZW5kKHApCiAgICBwbGFuLCBwbGFuX2Vycm9yID0gW10sIE5vbmUKICAgIGZvciBwIGluIHN3YWxsb3dzOgogICAgICAgIGlmIG5vdCBhZG9wdGVkLmdldChwKToKICAgICAgICAgICAgcGxhbl9lcnJvciA9ICgKICAgICAgICAgICAgICAgICJubyBhZG9wdGVkIGJsb2IgZm9yICVzIOKAlCBndWFyZCBpbnZlbnRzIG5vdGhpbmcgKGZhaWwtY2xvc2VkKSIgJSBwCiAgICAgICAgICAgICkKICAgICAgICAgICAgcGxhbiA9IFtdCiAgICAgICAgICAgIGJyZWFrCiAgICAgICAgcGxhbi5hcHBlbmQoeyJwYXRoIjogcCwgImZyb20iOiAiYmxvYjoiICsgYWRvcHRlZFtwXX0pCiAgICByZXR1cm4geyJzd2FsbG93cyI6IHN3YWxsb3dzLCAiYWxlcnRzIjogYWxlcnRzLCAicGxhbiI6IHBsYW4sICJwbGFuRXJyb3IiOiBwbGFuX2Vycm9yfQoKCmRlZiBfY2Fub24ob2JqKToKICAgIHJldHVybiBqc29uLmR1bXBzKG9iaiwgc29ydF9rZXlzPVRydWUsIHNlcGFyYXRvcnM9KCIsIiwgIjoiKSwgZW5zdXJlX2FzY2lpPUZhbHNlKQoKCmRlZiBidWlsZF9yZWNlaXB0KHByZXYsIGF0LCBwYXlsb2FkKToKICAgICIiIkhhc2gtbGlua2VkIHJlY2VpcHQ6IGhhc2ggPSBzaGEyNTYoY2Fub24oe21vZGUsYXQscHJldkhhc2gscGF5bG9hZH0pKS4iIiIKICAgIGJvZHkgPSB7CiAgICAgICAgIm1vZGUiOiAicmVjZWlwdCIsCiAgICAgICAgImF0IjogYXQsCiAgICAgICAgInByZXZIYXNoIjogcHJldiwKICAgICAgICAicGF5bG9hZCI6IHBheWxvYWQsCiAgICB9CiAgICBib2R5WyJoYXNoIl0gPSBoYXNobGliLnNoYTI1NihfY2Fub24oYm9keSkuZW5jb2RlKCJ1dGYtOCIpKS5oZXhkaWdlc3QoKQogICAgcmV0dXJuIGJvZHkKCgpkZWYgdmVyaWZ5X2NoYWluKHJlY2VpcHRzKToKICAgICIiIlJldHVybnMgKG9rLCBmaXJzdF9iYWRfaW5kZXh8Tm9uZSkuIFRhbXBlcmVkIHBheWxvYWQgb3IgYnJva2VuIHByZXYgbGluayDihpIgbm90IG9rLiIiIgogICAgcHJldiA9IE5vbmUKICAgIGZvciBpLCByIGluIGVudW1lcmF0ZShyZWNlaXB0cyk6CiAgICAgICAgZXhwZWN0ZWQgPSB7CiAgICAgICAgICAgICJtb2RlIjogci5nZXQoIm1vZGUiKSwKICAgICAgICAgICAgImF0Ijogci5nZXQoImF0IiksCiAgICAgICAgICAgICJwcmV2SGFzaCI6IHIuZ2V0KCJwcmV2SGFzaCIpLAogICAgICAgICAgICAicGF5bG9hZCI6IHIuZ2V0KCJwYXlsb2FkIiksCiAgICAgICAgfQogICAgICAgIGlmIHIuZ2V0KCJwcmV2SGFzaCIpICE9IHByZXY6CiAgICAgICAgICAgIHJldHVybiBGYWxzZSwgaQogICAgICAgIGggPSBoYXNobGliLnNoYTI1NihfY2Fub24oZXhwZWN0ZWQpLmVuY29kZSgidXRmLTgiKSkuaGV4ZGlnZXN0KCkKICAgICAgICBpZiBoICE9IHIuZ2V0KCJoYXNoIik6CiAgICAgICAgICAgIHJldHVybiBGYWxzZSwgaQogICAgICAgIHByZXYgPSByLmdldCgiaGFzaCIpCiAgICByZXR1cm4gVHJ1ZSwgTm9uZQoKCmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6CiAgICAjIENMSTogYHBsYW5gIOKAlCByZWFkIHsidHJlZSI6ey4uLn0sImFkb3B0ZWQiOnsuLi59fSBvbiBzdGRpbiwgZW1pdCBkZXRlY3QoKSBKU09OLgogICAgaW1wb3J0IHN5cwoKICAgIGRhdGEgPSBqc29uLmxvYWQoc3lzLnN0ZGluKQogICAgcHJpbnQoX2Nhbm9uKGRldGVjdChkYXRhWyJ0cmVlIl0sIGRhdGFbImFkb3B0ZWQiXSkpKQo=
+#!/usr/bin/env python3
+# fleet-receipts-guard-core.py — deterministic core of the fleet-economy receipts-rail guard.
+# sovereign-lane wave 19.85 (trace 1a16ecaa3e014051), MASTER DIRECTIVE §2 settlement-plane integrity + §8 deadlock-break.
+# G78-f extension (trace 1a178c595ee6edd5 lineage): the storm EVOLVED a second swallow class.
+#
+# Measured class 1 (wave 19.81): `vault-sync -s ours` merges ERASE rail paths (absent sha).
+# Measured class 2 (G78-f, 2026-10-27T12:xxZ): the storm re-lands rail paths as base64 CORPSES —
+#   the file exists (sha present) but the content is DEAD: tests/receipt-sign.test.ts became a
+#   truncated base64 blob (bun: "Unexpected end of file"), lib/receipt-sign.ts became base64,
+#   scripts/fleet-receipts-guard-core.py became base64. A corpse is not evolution: content-diff
+#   with a measured DEAD shape is a SWALLOW (rescuable), never a silent alert.
+#
+# Laws:
+#   - absence of a canonical path = swallow (rescue)
+#   - content-diff with shape="wound" (measured dead corpus: wrong magic for its kind) = swallow (rescue)
+#   - content-diff with shape="ok"/absent = alert-only (NEVER fight live evolution — backward compatible)
+#   - rescue only from adopted blobs — the guard invents nothing (fail-closed)
+#   - receipts are sha256 hash-linked (prevHash→hash); tamper is detectable
+# stdlib only. No network. No clock in detect() (clock injected by the loop).
+import hashlib, json
+
+CANONICAL_RAIL = (
+    "lib/receipt-sign.ts",
+    "tests/receipt-sign.test.ts",
+    "state/audit/verify_signatures.py",
+    "state/audit/receipt-2026-10-23-wave1980.json",
+)
+
+
+def shape_of(path, head):
+    """Classify a file head (first bytes, decoded utf-8 with errors='replace').
+
+    Returns "ok" | "wound" | "unknown". A rail file is ALIVE only if it starts with the
+    magic its kind requires: .ts → "/*" or "//"; .py → "#"; .json → "{" or "[".
+    base64 corpses start with base64 alphabet letters ("Lyog", "IyE", "ew", …) — dead.
+    """
+    h = (head or "").lstrip()
+    if path.endswith(".py"):
+        return "ok" if h.startswith("#") else "wound"
+    if path.endswith(".json"):
+        return "ok" if h[:1] in ("{", "[") else "wound"
+    if path.endswith(".ts"):
+        return "ok" if h.startswith("/*") or h.startswith("//") else "wound"
+    return "unknown"
+
+
+def detect(tree, adopted, shape=None):
+    """tree: {path: blob_sha_or_emptystring}; adopted: {path: blob_sha};
+    shape: optional {path: "ok"|"wound"|"unknown"} measured by the loop.
+
+    Returns {swallows, alerts, plan, planError}.
+    - swallow: path absent OR content-diff with measured dead shape → rescue candidate.
+    - alert: content drift with live/unknown shape — NEVER rescued.
+    - planError: non-None when a swallow has no adopted source (fail-closed, empty plan).
+    """
+    swallows, alerts = [], []
+    shape = shape or {}
+    for p in CANONICAL_RAIL:
+        sha = tree.get(p)
+        if not sha:
+            swallows.append(p)
+        elif p in adopted and adopted[p] == sha:
+            pass  # intact — byte-identical to the adopted blob
+        elif shape.get(p) == "wound":
+            swallows.append(p)  # corpse: dead corpus (measured magic mismatch) — not evolution,
+            # adopted-tracked or not; rescue still requires an adopted blob (fail-closed below)
+        elif p in adopted and adopted[p] != sha:
+            alerts.append(p)
+    plan, plan_error = [], None
+    for p in swallows:
+        if not adopted.get(p):
+            plan_error = (
+                "no adopted blob for %s — guard invents nothing (fail-closed)" % p
+            )
+            plan = []
+            break
+        plan.append({"path": p, "from": "blob:" + adopted[p]})
+    return {"swallows": swallows, "alerts": alerts, "plan": plan, "planError": plan_error}
+
+
+def _canon(obj):
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def build_receipt(prev, at, payload):
+    """Hash-linked receipt: hash = sha256(canon({mode,at,prevHash,payload}))."""
+    body = {
+        "mode": "receipt",
+        "at": at,
+        "prevHash": prev,
+        "payload": payload,
+    }
+    body["hash"] = hashlib.sha256(_canon(body).encode("utf-8")).hexdigest()
+    return body
+
+
+def verify_chain(receipts):
+    """Returns (ok, first_bad_index|None). Tampered payload or broken prev link → not ok."""
+    prev = None
+    for i, r in enumerate(receipts):
+        expected = {
+            "mode": r.get("mode"),
+            "at": r.get("at"),
+            "prevHash": r.get("prevHash"),
+            "payload": r.get("payload"),
+        }
+        if r.get("prevHash") != prev:
+            return False, i
+        h = hashlib.sha256(_canon(expected).encode("utf-8")).hexdigest()
+        if h != r.get("hash"):
+            return False, i
+        prev = r.get("hash")
+    return True, None
+
+
+if __name__ == "__main__":
+    # CLI: `plan` — read {"tree":{...},"adopted":{...},"shape":{...}?} on stdin, emit detect() JSON.
+    import sys
+
+    data = json.load(sys.stdin)
+    print(_canon(detect(data["tree"], data["adopted"], data.get("shape"))))
