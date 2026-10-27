@@ -1326,6 +1326,36 @@ const server = Bun.serve({
         const lim = Math.min(500, Math.max(1, +(url.searchParams.get("limit") ?? 100)));
         return Response.json({ tail: tailRing.slice(-lim).reverse() });
       }
+      /* ── R3 · GET /ledger/last?n=50 — קבלות-הספר-החתום שורה-שורה מהדיסק ──
+       * ה-/ledger שמעל מגיש את הטבעת-בזיכרון (מאז-עלייה בלבד); זה-כאן קורא את
+       * זנב-הספר-החי עצמו (ledger.jsonl + גלילים ledger-NNNN) — כל-שורה עם ה-hash
+       * שלה · קריאה-בלבד (חוק-השומר: לופבק-לכתיבה בלבד, GET-קריאה-פתוחה-כנה) ·
+       * חלון-זנב חסום (מ-סוף-הקובץ) — אפס-קריאת-ספר-שלם לכל-בקשה. */
+      if (url.pathname === "/ledger/last") {
+        const q = +(url.searchParams.get("n") ?? 50);
+        const n = Math.min(500, Math.max(1, Number.isFinite(q) ? Math.floor(q) : 50));
+        const files = fs.readdirSync(STATE_DIR).filter((f) => f === "ledger.jsonl" || f.startsWith("ledger-")).sort().reverse();
+        const tail: any[] = [];
+        const read: string[] = [];
+        try {
+          for (const f of files) {
+            if (tail.length >= n) break;
+            const p = path.join(STATE_DIR, f);
+            const size = fs.statSync(p).size;
+            const win = Math.min(size, n * 512 + 4096); // שורת-ספר-נמדדת < 512B — חלון-זנב מספיק
+            const buf = Buffer.alloc(win);
+            const fd = fs.openSync(p, "r");
+            try { fs.readSync(fd, buf, 0, win, size - win); } finally { fs.closeSync(fd); }
+            const lines = buf.toString("utf8").split("\n").filter((l) => l.trim().length > 0);
+            if (win < size) lines.shift(); // שורה-ראשונה-קטועה-באמצע — זנב-כנה-בלבד
+            for (let i = lines.length - 1; i >= 0 && tail.length < n; i--) {
+              try { tail.push(JSON.parse(lines[i])); } catch { /* שורה-תפורה — מדלגים-בכנות, לא-ממציאים */ }
+            }
+            read.push(f);
+          }
+        } catch { /* כנה — מה-שנקרא מוגש, השאר חסר-בכנות */ }
+        return Response.json({ ok: true, engine: "fleet-economy", seq, lastH, n, count: tail.length, files: read, tail });
+      }
       if (url.pathname === "/verify") {
         const r = verifyChain();
         if (!r.ok) {
