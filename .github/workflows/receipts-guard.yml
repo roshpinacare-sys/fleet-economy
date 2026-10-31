@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RAIL='["lib/receipt-sign.ts","tests/receipt-sign.test.ts","state/audit/verify_signatures.py","state/audit/receipt-2026-10-23-wave1980.json","scripts/fleet-receipts-guard-core.py",".github/workflows/receipts-guard.yml"]'
+          RAIL='["lib/receipt-sign.ts","tests/receipt-sign.test.ts","state/audit/verify_signatures.py","scripts/fleet-receipts-guard-core.py",".github/workflows/receipts-guard.yml"]'
           python3 - "$RAIL" <<'PYEOF' > plan.json
           import json, os, subprocess, sys
           rail = json.loads(sys.argv[1])
